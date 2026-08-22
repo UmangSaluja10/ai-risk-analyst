@@ -1,0 +1,22 @@
+{
+  "USR-992-FX-41B": {
+    "transaction_count": 5,
+    "total_amount": 593800.0,
+    "avg_amount": 118760.0,
+    "locations": [
+      "192.168.1.1 (RU)",
+      "192.165.1.1 (RU)"
+    ],
+    "first_seen": "2026-08-22T11:14:00"
+  },
+  "USR-992-FX-41C": {
+    "transaction_count": 4,
+    "total_amount": 935001.0,
+    "avg_amount": 233750.25,
+    "locations": [
+      "192.168.1.1 (RU)",
+      "192.167.5.5 (RU)"
+    ],
+    "first_seen": "2026-08-22T11:14:00"
+  }
+}
