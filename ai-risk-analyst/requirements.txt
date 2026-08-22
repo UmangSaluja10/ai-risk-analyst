@@ -1,2 +1,5 @@
 Flask==3.0.3
 pydantic==2.8.2
+groq==0.11.0
+python-dotenv==1.0.1
+httpx==0.27.2

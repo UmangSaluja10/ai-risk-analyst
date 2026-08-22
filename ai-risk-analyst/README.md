@@ -1,16 +1,22 @@
 # AI Risk Intelligence Engine
 
-## Current status: Phase 4 complete — Feature Aggregation
+## Current status: Phase 5 complete — LLM Reasoning Engine
 
 ## What's built so far
 - **Phase 0:** Flask backend + exact dashboard UI, wired end-to-end.
 - **Phase 1:** Validated transaction schema (Pydantic).
 - **Phase 2:** Static rule-based scoring.
 - **Phase 3:** Per-user memory (JSON-file-backed).
-- **Phase 4:** Cleanup — merged rule + memory outputs into one `aggregator.py`
-  module. `main.py` is now: validate → rules → memory → aggregate → respond.
-  No logic changed, no new behavior — this just makes the codebase clean
-  enough to plug the LLM into in Phase 5.
+- **Phase 4:** Feature aggregation cleanup.
+- **Phase 5:** Real LLM explanations via **Groq** (`llama-3.1-8b-instant`).
+  If no API key is set, falls back to the rule-based reasons string —
+  the app never breaks because of the LLM layer.
+
+## Setup required for this phase
+1. Get a free key at https://console.groq.com (no card needed)
+2. Copy `.env.example` → `.env`
+3. Put your real key in `.env`: `GROQ_API_KEY=gsk_...`
+4. `.env` is gitignored — never commit it
 
 ## Project structure
 ```
@@ -19,9 +25,10 @@ ai-risk-analyst/
 │   ├── main.py
 │   ├── models/transaction.py
 │   ├── services/
-│   │   ├── rule_engine.py       # static rules (Phase 2)
-│   │   ├── profile_service.py   # per-user memory (Phase 3)
-│   │   └── aggregator.py        # merges rules + memory into one object (Phase 4)
+│   │   ├── rule_engine.py
+│   │   ├── profile_service.py
+│   │   ├── aggregator.py
+│   │   └── llm_engine.py        # Groq call + prompt (Phase 5)
 │   ├── routes/
 │   └── utils/
 ├── templates/index.html
@@ -29,6 +36,8 @@ ai-risk-analyst/
 ├── memory/user_profiles.json
 ├── rag/
 ├── tests/
+├── .env.example
+├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
@@ -37,13 +46,11 @@ ai-risk-analyst/
 ```bash
 cd ai-risk-analyst
 pip install -r requirements.txt
+cp .env.example .env      # then edit .env with your real Groq key
 python backend/main.py
 ```
 Open **http://127.0.0.1:5000**
 
 ## Not built yet
-- LLM-generated explanations (Phase 5) — `aggregator.py`'s output is exactly
-  what will get handed to the LLM prompt next phase, replacing the current
-  concatenated-reasons string
-- RAG grounding (Phase 6)
+- RAG grounding (Phase 6) — LLM currently reasons only from the transaction + scores, no external fraud-pattern documents yet
 - Firebase persistence (currently local JSON file)

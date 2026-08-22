@@ -4,12 +4,18 @@ Flask backend with validated transaction input (Pydantic) feeding a still-dummy
 risk response. Real detection logic (rules engine) arrives in Phase 2.
 """
 
+import os
+
 from flask import Flask, render_template, request, jsonify
+from dotenv import load_dotenv
 
 from models.transaction import parse_transaction
 from services.rule_engine import evaluate
 from services import profile_service
 from services.aggregator import aggregate
+from services import llm_engine
+
+load_dotenv()
 
 app = Flask(
     __name__,
@@ -45,6 +51,7 @@ def analyze():
     )
 
     result = aggregate(rule_result, profile_eval)
+    explanation = llm_engine.generate_explanation(transaction, result)
 
     # Record this transaction into the user's profile AFTER scoring, so it doesn't score against itself
     profile_service.record_transaction(
@@ -54,7 +61,7 @@ def analyze():
     response = {
         "risk_score": result["risk_score"],
         "status": result["status"],
-        "explanation": "PHASE 4 (rules + memory, aggregated, no LLM yet): " + " ".join(result["reasons"]),
+        "explanation": explanation,
         "factors": result["factors"],
         "profile": {
             "avg_amount": profile_before["avg_amount"],
