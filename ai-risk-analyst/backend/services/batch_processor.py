@@ -50,10 +50,13 @@ def _summarize(scored: list[dict]) -> list[str]:
         return ["No transactions were flagged as Review or Suspicious in this batch."]
 
     insights = []
-    odd_hour_count = sum(1 for s in flagged if any("odd" in r.lower() for r in s["result"]["reasons"]))
-    if odd_hour_count > 0:
-        pct = round(odd_hour_count / len(flagged) * 100)
-        insights.append(f"{pct}% of flagged transactions occurred during odd hours (10PM-6AM).")
+    timing_flagged = sum(
+        1 for s in flagged
+        if any(f["label"] == "Unusual Transaction Timing" and f["score"] > 0 for f in s["result"]["factors"])
+    )
+    if timing_flagged > 0:
+        pct = round(timing_flagged / len(flagged) * 100)
+        insights.append(f"{pct}% of flagged transactions had unusual timing relative to that user's own pattern.")
 
     location_counts = {}
     for s in flagged:
@@ -81,7 +84,11 @@ def process_batch(rows: list[dict]) -> dict:
             continue
 
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(transaction, user_avg=profile_before["avg_amount"] or None)
+        rule_result = evaluate(
+            transaction,
+            user_avg=profile_before["avg_amount"] or None,
+            user_day_ratio=profile_service.get_day_ratio(profile_before),
+        )
         profile_eval = profile_service.evaluate_against_profile(transaction.user_id, transaction.location)
         result = aggregate(rule_result, profile_eval, profile_before["transaction_count"])
 

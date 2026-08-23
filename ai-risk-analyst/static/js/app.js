@@ -54,6 +54,7 @@ function renderBatchTable(showFlaggedOnly) {
       <td class="py-2 pr-4 font-bold font-data-point ${statusColor[r.status] || ""}">${r.risk_score}</td>
       <td class="py-2 pr-4 ${statusColor[r.status] || ""}">${r.status}</td>
       <td class="py-2 pr-4">${r.confidence}</td>
+      <td class="py-2 pr-4 text-on-surface-variant max-w-xs truncate" title="${r.explanation.replace(/"/g, '&quot;')}">${r.explanation}</td>
     `;
     tbody.appendChild(tr);
   });

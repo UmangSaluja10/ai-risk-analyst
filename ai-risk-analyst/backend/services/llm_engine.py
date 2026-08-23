@@ -72,7 +72,8 @@ def generate_explanation(transaction, result: dict, rag_context: list[dict] | No
                 {"role": "user", "content": _build_user_prompt(transaction, result, rag_context)},
             ],
             temperature=0.3,
-            max_tokens=220,
+            max_tokens=600,
+            reasoning_effort="low",
         )
         text = response.choices[0].message.content.strip()
         return text if text else fallback

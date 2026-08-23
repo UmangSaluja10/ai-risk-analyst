@@ -7,7 +7,14 @@ Full pipeline: validated input → rule engine → user memory → feature
 aggregation → Groq LLM reasoning → RAG grounding → confidence + pipeline
 visibility → Firebase persistence (with local JSON fallback).
 
-**This update adds:**
+**This update fixes:**
+- **Behavioral timing detection** — the old "10PM-6AM = suspicious" rule was
+  too blunt (flags legitimate night-shift workers, misses a normally-daytime
+  user transacting at 3AM). It now tracks each user's day/night transaction
+  split and flags DEVIATION from their own pattern, with a static fallback
+  for brand-new users with no history.
+- **Batch table now shows AI Insight** (explanation text) per row, not just score/status.
+- **Default User ID** in the single-transaction form now matches the batch sample file's naming (`USR-001`).
 - **Batch Risk Analyzer** — new mode (sidebar → "Batch Analysis"), upload a
   CSV/JSON file of transactions, get a ranked risk table, summary insights,
   and a CSV export. Uses a hybrid strategy: full LLM+RAG explanations only

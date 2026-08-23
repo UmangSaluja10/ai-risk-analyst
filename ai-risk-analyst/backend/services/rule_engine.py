@@ -36,10 +36,35 @@ def score_amount(amount: float, user_avg: float | None = None) -> tuple[int, str
     return 0, "Amount within normal range"
 
 
-def score_time(hour: int) -> tuple[int, str]:
-    if hour >= ODD_HOUR_START or hour < ODD_HOUR_END:
-        return 20, "Transaction occurred during odd hours (10PM-6AM)"
-    return 0, "Transaction occurred during normal hours"
+def score_time(hour: int, user_day_ratio: float | None = None) -> tuple[int, str]:
+    """
+    Phase 7-style upgrade: if we know this user's historical day/night split,
+    flag DEVIATION from their own pattern, not a flat clock-time rule.
+    A person who always transacts at night isn't "suspicious" for transacting
+    at night -- they're suspicious if they suddenly transact at an unusual
+    time FOR THEM. Falls back to a static day/night check for new users.
+    """
+    is_night = hour >= ODD_HOUR_START or hour < ODD_HOUR_END
+
+    if user_day_ratio is None:
+        # No history yet -- static fallback
+        if is_night:
+            return 20, "Transaction occurred during odd hours (10PM-6AM); no history yet to personalize this check"
+        return 0, "Transaction occurred during normal hours"
+
+    if user_day_ratio >= 0.7:
+        # This user is normally a daytime transactor
+        if is_night:
+            return 25, f"Unusual for this user: they transact during the day {user_day_ratio:.0%} of the time, but this happened at night"
+        return 0, "Transaction time consistent with this user's usual daytime pattern"
+
+    if user_day_ratio <= 0.3:
+        # This user is normally a nighttime transactor
+        if not is_night:
+            return 20, f"Unusual for this user: they transact at night {(1 - user_day_ratio):.0%} of the time, but this happened during the day"
+        return 0, "Transaction time consistent with this user's usual nighttime pattern"
+
+    return 0, "User has a mixed transaction-timing history; no timing anomaly detected"
 
 
 def score_location(location: str) -> tuple[int, str]:
@@ -49,14 +74,14 @@ def score_location(location: str) -> tuple[int, str]:
     return 0, "Location not flagged as high-risk"
 
 
-def evaluate(transaction, user_avg: float | None = None) -> dict:
+def evaluate(transaction, user_avg: float | None = None, user_day_ratio: float | None = None) -> dict:
     """
     Runs all rules against a validated Transaction object.
-    user_avg (optional): this user's historical average amount, for dynamic
-    personalized amount scoring (Phase 7). None/omitted = static fallback tiers.
+    user_avg / user_day_ratio (optional): this user's historical average amount
+    and day-vs-night transaction ratio, for personalized scoring. None = static fallback.
     """
     amount_score, amount_reason = score_amount(transaction.amount, user_avg)
-    time_score, time_reason = score_time(transaction.timestamp.hour)
+    time_score, time_reason = score_time(transaction.timestamp.hour, user_day_ratio)
     location_score, location_reason = score_location(transaction.location)
 
     total_score = min(amount_score + time_score + location_score, 100)
@@ -70,7 +95,7 @@ def evaluate(transaction, user_avg: float | None = None) -> dict:
 
     factors = [
         {"label": "Amount Anomaly", "score": amount_score, "color": "error", "reason": amount_reason},
-        {"label": "Odd-Hour Transaction", "score": time_score, "color": "tertiary", "reason": time_reason},
+        {"label": "Unusual Transaction Timing", "score": time_score, "color": "tertiary", "reason": time_reason},
         {"label": "High-Risk Location", "score": location_score, "color": "primary", "reason": location_reason},
     ]
 

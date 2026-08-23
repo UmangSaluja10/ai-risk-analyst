@@ -61,7 +61,11 @@ def analyze():
 
     try:
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(transaction, user_avg=profile_before["avg_amount"] or None)
+        rule_result = evaluate(
+            transaction,
+            user_avg=profile_before["avg_amount"] or None,
+            user_day_ratio=profile_service.get_day_ratio(profile_before),
+        )
         profile_eval = profile_service.evaluate_against_profile(transaction.user_id, transaction.location)
 
         result = aggregate(rule_result, profile_eval, profile_before["transaction_count"])

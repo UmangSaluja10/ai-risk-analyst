@@ -35,6 +35,10 @@ def _save_profiles(data: dict) -> None:
         json.dump(data, f, indent=2, default=str)
 
 
+DAY_START = 6
+DAY_END = 22  # hours in [6, 22) count as "day"; outside is "night"
+
+
 def _safe_key(user_id: str) -> str:
     """Firebase Realtime DB keys can't contain . # $ [ ] / -- sanitize for storage."""
     for ch in [".", "#", "$", "[", "]", "/"]:
@@ -50,7 +54,19 @@ def get_profile(user_id: str) -> dict:
         "avg_amount": 0,
         "locations": [],
         "first_seen": None,
+        "day_count": 0,
+        "night_count": 0,
     })
+
+
+def get_day_ratio(profile: dict) -> float | None:
+    """Fraction of this user's history that happened during the day. None = no history yet."""
+    day = profile.get("day_count", 0)
+    night = profile.get("night_count", 0)
+    total = day + night
+    if total == 0:
+        return None
+    return day / total
 
 
 def evaluate_against_profile(user_id: str, location: str) -> dict:
@@ -92,6 +108,8 @@ def record_transaction(user_id: str, amount: float, location: str, timestamp: da
         "avg_amount": 0,
         "locations": [],
         "first_seen": timestamp.isoformat(),
+        "day_count": 0,
+        "night_count": 0,
     })
 
     profile["transaction_count"] += 1
@@ -101,6 +119,11 @@ def record_transaction(user_id: str, amount: float, location: str, timestamp: da
         profile["locations"].append(location)
     if not profile.get("first_seen"):
         profile["first_seen"] = timestamp.isoformat()
+
+    if DAY_START <= timestamp.hour < DAY_END:
+        profile["day_count"] = profile.get("day_count", 0) + 1
+    else:
+        profile["night_count"] = profile.get("night_count", 0) + 1
 
     profiles[key] = profile
     _save_profiles(profiles)
