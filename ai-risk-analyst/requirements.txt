@@ -3,3 +3,7 @@ pydantic==2.8.2
 groq==0.11.0
 python-dotenv==1.0.1
 httpx==0.27.2
+faiss-cpu==1.9.0.post1
+scikit-learn==1.5.1
+numpy==1.26.4
+firebase-admin==6.5.0

@@ -1,0 +1,23 @@
+[RBI-2FA-2025] RBI Two-Factor Authentication Mandate
+RBI's Authentication Mechanisms for Digital Payment Transactions Directions, 2025 require two distinct authentication factors for all domestic digital payments, with at least one factor being dynamic and unique to that specific transaction. Compliance is mandatory from April 1, 2026. This replaces reliance on static, reusable credentials.
+
+[RBI-COMPENSATION-2026] RBI Customer Compensation Framework
+Under RBI's revised customer protection rules, if a customer reports an unauthorized digital transaction promptly and the fraud occurred through no fault of their own, they may be compensated for smaller losses at a fixed reimbursement rate. Banks bear liability when a fraud occurs due to failures in their own authentication or security systems.
+
+[MULE-DORMANT-SPIKE] Mule Account Pattern: Dormant-to-Active Spike
+A common fraud indicator is an account with little to no activity for months that suddenly begins processing many UPI transactions in a short window. This dormant-to-active spike often signals the account has been rented, bought, or hijacked to move stolen funds.
+
+[MULE-FIFO] Mule Account Pattern: Rapid Pass-Through (FIFO)
+Investigators watch for accounts where a large inbound credit is followed almost immediately by smaller outbound transfers to multiple recipients, leaving the account near zero balance again within hours or days. This first-in-first-out pattern is a hallmark of money-laundering layering through mule accounts.
+
+[UPI-COLLECT-SCAM] UPI Collect Request / Fake Refund Scam
+One of the most common UPI scams involves a fraudster sending a payment "collect request" disguised as an incoming refund. The victim, believing they are about to receive money, approves the request with their UPI PIN and unintentionally authorizes an outgoing debit instead.
+
+[SIM-SWAP] SIM Swap Fraud
+Fraudsters trick or bribe telecom staff into issuing a duplicate SIM for a victim's number, letting them intercept OTPs and dynamic authentication codes sent via SMS, then use those codes to take over UPI or banking access.
+
+[RISKY-GEO] Risky Geography and VPN/Proxy Indicators
+Transactions originating from IP ranges in regions with limited data-sharing cooperation, or masked using VPN or Tor exit nodes, are harder to trace and are commonly associated with cross-border fraud rings routing funds through Indian mule accounts.
+
+[STRUCTURING] Structuring to Avoid Scrutiny
+Fraud rings sometimes deliberately split large sums into several smaller transactions to stay under reporting or review thresholds, since a single very large transaction is more likely to trigger manual review or additional authentication.

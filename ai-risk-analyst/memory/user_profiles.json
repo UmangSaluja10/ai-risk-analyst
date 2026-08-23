@@ -20,12 +20,26 @@
     "first_seen": "2026-08-22T11:14:00"
   },
   "USR-992-FX-41A": {
-    "transaction_count": 5,
-    "total_amount": 212500.0,
-    "avg_amount": 42500.0,
+    "transaction_count": 16,
+    "total_amount": 1444200.0,
+    "avg_amount": 90262.5,
     "locations": [
-      "192.168.1.1 (RU)"
+      "192.168.1.1 (RU)",
+      "185.220.101.1 (RU)",
+      "165.182.30.5 (RU)",
+      "192.168.1.1 (VPN)",
+      "192.168.1.1"
     ],
     "first_seen": "2026-08-22T19:43:00"
+  },
+  "USR-990-FX-41X": {
+    "transaction_count": 10,
+    "total_amount": 7175000.0,
+    "avg_amount": 717500.0,
+    "locations": [
+      "165.182.30.5 (RU)",
+      "192.165.1.1 (RU)"
+    ],
+    "first_seen": "2026-08-23T05:39:00"
   }
 }

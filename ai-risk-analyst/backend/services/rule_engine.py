@@ -9,14 +9,30 @@ RISKY_LOCATION_KEYWORDS = ["RU", "NG", "unknown", "vpn", "tor"]
 ODD_HOUR_START = 22  # 10 PM
 ODD_HOUR_END = 6     # 6 AM
 
-# Amount thresholds in INR (Razorpay context - rupee-scale consumer/business transactions)
-def score_amount(amount: float) -> tuple[int, str]:
+DEVIATION_MULTIPLIER = 1.5  # ratio above user's own average where dynamic scoring kicks in
+
+
+def score_amount(amount: float, user_avg: float | None = None) -> tuple[int, str]:
+    """
+    Phase 7 upgrade: if the user has transaction history, score continuously
+    based on how far this amount deviates from THEIR average (personalized,
+    not a hardcoded bracket). Falls back to static tiers for brand-new users
+    with no history yet.
+    """
+    if user_avg and user_avg > 0:
+        ratio = amount / user_avg
+        if ratio <= DEVIATION_MULTIPLIER:
+            return 0, f"Amount consistent with this user's average (Rs.{user_avg:,.2f})"
+        score = min(45, round((ratio - 1) * 15))
+        return score, f"Amount is {ratio:.1f}x this user's average (Rs.{user_avg:,.2f})"
+
+    # Static fallback (new user, no history to personalize against)
     if amount >= 200000:
-        return 45, "Very large transaction amount"
+        return 45, "Very large transaction amount (no user history to compare against yet)"
     if amount >= 50000:
-        return 30, "High transaction amount"
+        return 30, "High transaction amount (no user history to compare against yet)"
     if amount >= 10000:
-        return 15, "Moderate transaction amount"
+        return 15, "Moderate transaction amount (no user history to compare against yet)"
     return 0, "Amount within normal range"
 
 
@@ -33,13 +49,13 @@ def score_location(location: str) -> tuple[int, str]:
     return 0, "Location not flagged as high-risk"
 
 
-def evaluate(transaction) -> dict:
+def evaluate(transaction, user_avg: float | None = None) -> dict:
     """
     Runs all rules against a validated Transaction object.
-    Returns a dict with total score, status, and per-factor breakdown
-    (matching the shape the frontend already expects).
+    user_avg (optional): this user's historical average amount, for dynamic
+    personalized amount scoring (Phase 7). None/omitted = static fallback tiers.
     """
-    amount_score, amount_reason = score_amount(transaction.amount)
+    amount_score, amount_reason = score_amount(transaction.amount, user_avg)
     time_score, time_reason = score_time(transaction.timestamp.hour)
     location_score, location_reason = score_location(transaction.location)
 

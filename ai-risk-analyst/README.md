@@ -1,22 +1,26 @@
 # AI Risk Intelligence Engine
 
-## Current status: Phase 5 complete — LLM Reasoning Engine
+## Current status: Firebase Persistence complete (built on top of Phase 7)
 
 ## What's built so far
-- **Phase 0:** Flask backend + exact dashboard UI, wired end-to-end.
-- **Phase 1:** Validated transaction schema (Pydantic).
-- **Phase 2:** Static rule-based scoring.
-- **Phase 3:** Per-user memory (JSON-file-backed).
-- **Phase 4:** Feature aggregation cleanup.
-- **Phase 5:** Real LLM explanations via **Groq** (`llama-3.1-8b-instant`).
-  If no API key is set, falls back to the rule-based reasons string —
-  the app never breaks because of the LLM layer.
+- **Phases 0-7:** Full pipeline — validated input, rules, memory, aggregation,
+  Groq LLM reasoning, RAG grounding, confidence + pipeline visibility.
+- **Firebase Persistence:** User profiles can now live in Firebase Realtime
+  Database instead of a local JSON file. If Firebase isn't configured, it
+  automatically falls back to the local JSON file — same pattern as the
+  Groq LLM fallback, so nothing breaks while you're setting it up.
 
-## Setup required for this phase
-1. Get a free key at https://console.groq.com (no card needed)
-2. Copy `.env.example` → `.env`
-3. Put your real key in `.env`: `GROQ_API_KEY=gsk_...`
-4. `.env` is gitignored — never commit it
+## Setup required for this phase (see step card above for the click-by-click version)
+1. Create a Firebase project + enable Realtime Database
+2. Download a service account key → save as `serviceAccountKey.json` in project root
+3. Add to `.env`:
+   ```
+   FIREBASE_CREDENTIALS_PATH=serviceAccountKey.json
+   FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
+   ```
+4. Restart the server — check the terminal for `[firebase] Connected successfully.`
+   If you see a fallback warning instead, it's using the local JSON file, which
+   is fine for continued testing.
 
 ## Project structure
 ```
@@ -26,14 +30,16 @@ ai-risk-analyst/
 │   ├── models/transaction.py
 │   ├── services/
 │   │   ├── rule_engine.py
-│   │   ├── profile_service.py
+│   │   ├── profile_service.py   # now reads/writes Firebase OR local JSON
+│   │   ├── firebase_client.py   # NEW -- Firebase init, graceful fallback
 │   │   ├── aggregator.py
-│   │   └── llm_engine.py        # Groq call + prompt (Phase 5)
+│   │   └── llm_engine.py
 │   ├── routes/
 │   └── utils/
 ├── templates/index.html
 ├── static/js/app.js
-├── memory/user_profiles.json
+├── memory/user_profiles.json    # fallback storage if Firebase not configured
+├── serviceAccountKey.json       # YOU add this, gitignored
 ├── rag/
 ├── tests/
 ├── .env.example
@@ -46,11 +52,11 @@ ai-risk-analyst/
 ```bash
 cd ai-risk-analyst
 pip install -r requirements.txt
-cp .env.example .env      # then edit .env with your real Groq key
+cp .env.example .env      # add Groq key + Firebase config
 python backend/main.py
 ```
 Open **http://127.0.0.1:5000**
 
 ## Not built yet
-- RAG grounding (Phase 6) — LLM currently reasons only from the transaction + scores, no external fraud-pattern documents yet
-- Firebase persistence (currently local JSON file)
+- Dynamic sidebar navigation (User Profiles / Fraud Insights / Logs pages currently static links)
+- Phase 8/9 polish: scripted test cases, final demo-ready writeup

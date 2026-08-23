@@ -189,6 +189,7 @@
 <div class="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-error via-background to-background"></div>
 <h3 id="riskStatusHeading" class="font-headline-sm text-headline-sm text-error mb-2 relative z-10">AWAITING ANALYSIS</h3>
 <p id="riskStatusSubtitle" class="text-on-surface-variant text-sm mb-6 relative z-10">Submit a transaction on the left to run Phase 0 detection.</p>
+<span id="confidenceBadge" class="hidden text-xs font-bold px-2 py-1 rounded-full mb-3 relative z-10"></span>
 <div class="relative w-40 h-40 flex items-center justify-center z-10">
 <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
 <circle cx="50" cy="50" fill="none" r="45" stroke="rgba(255,255,255,0.1)" stroke-width="8"></circle>
@@ -211,10 +212,17 @@ No analysis has been run yet. Fill in the transaction fields and click ANALYZE R
 </p>
 </div>
 
-<div class="glass-panel rounded-xl p-md flex-1">
+<div class="glass-panel rounded-xl p-md">
 <h3 class="font-label-caps text-label-caps text-on-surface-variant mb-6">RISK FACTORS BREAKDOWN</h3>
 <div id="riskFactorsContainer" class="flex flex-col gap-5">
 <p class="text-on-surface-variant text-sm">No factors yet — run an analysis.</p>
+</div>
+</div>
+
+<div class="glass-panel rounded-xl p-md">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-3">PIPELINE</h3>
+<div id="pipelineStatus" class="flex flex-wrap gap-3 text-sm">
+<span class="text-on-surface-variant">No analysis run yet.</span>
 </div>
 </div>
 </div>

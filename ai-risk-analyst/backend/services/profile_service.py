@@ -8,12 +8,15 @@ import json
 import os
 from datetime import datetime, timezone
 
-PROFILE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "memory", "user_profiles.json")
+from services import firebase_client
 
-DEVIATION_MULTIPLIER = 3  # amount > 3x user's average triggers a flag
+PROFILE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "memory", "user_profiles.json")
 
 
 def _load_profiles() -> dict:
+    if firebase_client.FIREBASE_ENABLED:
+        data = firebase_client.get_ref().get()
+        return data or {}
     if not os.path.exists(PROFILE_PATH):
         return {}
     with open(PROFILE_PATH, "r") as f:
@@ -24,14 +27,24 @@ def _load_profiles() -> dict:
 
 
 def _save_profiles(data: dict) -> None:
+    if firebase_client.FIREBASE_ENABLED:
+        firebase_client.get_ref().set(data)
+        return
     os.makedirs(os.path.dirname(PROFILE_PATH), exist_ok=True)
     with open(PROFILE_PATH, "w") as f:
         json.dump(data, f, indent=2, default=str)
 
 
+def _safe_key(user_id: str) -> str:
+    """Firebase Realtime DB keys can't contain . # $ [ ] / -- sanitize for storage."""
+    for ch in [".", "#", "$", "[", "]", "/"]:
+        user_id = user_id.replace(ch, "_")
+    return user_id
+
+
 def get_profile(user_id: str) -> dict:
     profiles = _load_profiles()
-    return profiles.get(user_id, {
+    return profiles.get(_safe_key(user_id), {
         "transaction_count": 0,
         "total_amount": 0,
         "avg_amount": 0,
@@ -40,26 +53,20 @@ def get_profile(user_id: str) -> dict:
     })
 
 
-def evaluate_against_profile(user_id: str, amount: float, location: str) -> dict:
-    """Compares a NEW transaction against the user's EXISTING history (before recording it)."""
+def evaluate_against_profile(user_id: str, location: str) -> dict:
+    """
+    Phase 7: amount deviation is now handled inside rule_engine.score_amount
+    (dynamic, personalized). This function only checks location novelty, so
+    it isn't double-counted.
+    """
     profile = get_profile(user_id)
 
     if profile["transaction_count"] == 0:
         return {
-            "amount_score": 0,
-            "amount_reason": "New user -- no prior history to compare against",
             "location_score": 0,
             "location_reason": "New user -- no prior location history",
             "is_new_user": True,
         }
-
-    avg = profile["avg_amount"]
-    if avg > 0 and amount > avg * DEVIATION_MULTIPLIER:
-        amount_score = 25
-        amount_reason = f"Amount is {amount / avg:.1f}x this user's average (Rs.{avg:,.2f})"
-    else:
-        amount_score = 0
-        amount_reason = "Amount consistent with this user's history"
 
     if location not in profile["locations"]:
         location_score = 20
@@ -69,8 +76,6 @@ def evaluate_against_profile(user_id: str, amount: float, location: str) -> dict
         location_reason = "Location matches user's known locations"
 
     return {
-        "amount_score": amount_score,
-        "amount_reason": amount_reason,
         "location_score": location_score,
         "location_reason": location_reason,
         "is_new_user": False,
@@ -79,8 +84,9 @@ def evaluate_against_profile(user_id: str, amount: float, location: str) -> dict
 
 def record_transaction(user_id: str, amount: float, location: str, timestamp: datetime) -> None:
     """Updates (or creates) the user's profile with this transaction. Call AFTER scoring."""
+    key = _safe_key(user_id)
     profiles = _load_profiles()
-    profile = profiles.get(user_id, {
+    profile = profiles.get(key, {
         "transaction_count": 0,
         "total_amount": 0,
         "avg_amount": 0,
@@ -96,7 +102,7 @@ def record_transaction(user_id: str, amount: float, location: str, timestamp: da
     if not profile.get("first_seen"):
         profile["first_seen"] = timestamp.isoformat()
 
-    profiles[user_id] = profile
+    profiles[key] = profile
     _save_profiles(profiles)
 
 

@@ -149,11 +149,55 @@ form.addEventListener("submit", async (e) => {
     renderFactors(data.factors || []);
     addFeedEntry(data.status);
 
+    const confBadge = document.getElementById("confidenceBadge");
+    if (data.confidence) {
+      const confColors = {
+        High: "bg-primary/20 text-primary",
+        Medium: "bg-tertiary/20 text-tertiary",
+        Low: "bg-error/20 text-error",
+      };
+      confBadge.className = `text-xs font-bold px-2 py-1 rounded-full mb-3 relative z-10 ${confColors[data.confidence] || ""}`;
+      confBadge.textContent = `CONFIDENCE: ${data.confidence.toUpperCase()}`;
+      confBadge.classList.remove("hidden");
+    }
+
+    if (data.pipeline) {
+      const pipelineContainer = document.getElementById("pipelineStatus");
+      const labels = {
+        rule_engine: "Rule Engine",
+        user_profiling: "User Profiling",
+        llm_reasoning: "LLM Reasoning",
+        rag: "RAG",
+      };
+      pipelineContainer.innerHTML = Object.entries(data.pipeline)
+        .map(([key, ran]) => {
+          const icon = ran ? "check_circle" : "cancel";
+          const color = ran ? "text-primary" : "text-on-surface-variant";
+          return `<span class="flex items-center gap-1 ${color}"><span class="material-symbols-outlined text-[16px]">${icon}</span>${labels[key] || key}</span>`;
+        })
+        .join("");
+    }
+
     if (data.profile) {
       document.getElementById("userAvgTx").textContent =
         data.profile.transaction_count > 0 ? `Rs.${data.profile.avg_amount.toLocaleString()}` : "No history yet";
       document.getElementById("userAccountAge").textContent =
         data.profile.transaction_count > 0 ? `${data.profile.account_age_days} days` : "New user";
+    }
+
+    if (data.rag_context) {
+      const ragContainer = document.getElementById("ragContext");
+      ragContainer.innerHTML = "";
+      if (data.rag_context.length === 0) {
+        ragContainer.innerHTML = '<p class="text-on-surface-variant text-sm">No matching fraud patterns found.</p>';
+      } else {
+        data.rag_context.forEach((doc) => {
+          const div = document.createElement("div");
+          div.className = "text-sm border-l-2 border-outline pl-3 py-1";
+          div.innerHTML = `<p class="text-on-surface-variant leading-relaxed"><span class="text-primary font-bold bg-primary/10 px-1 rounded">${doc.title}</span> ${doc.content}</p>`;
+          ragContainer.appendChild(div);
+        });
+      }
     }
   } catch (err) {
     document.getElementById("aiExplanationText").textContent =
