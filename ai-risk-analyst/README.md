@@ -1,62 +1,76 @@
 # AI Risk Intelligence Engine
 
-## Current status: Firebase Persistence complete (built on top of Phase 7)
+## Current status: Core pipeline complete + Batch Mode + polish pass
 
-## What's built so far
-- **Phases 0-7:** Full pipeline — validated input, rules, memory, aggregation,
-  Groq LLM reasoning, RAG grounding, confidence + pipeline visibility.
-- **Firebase Persistence:** User profiles can now live in Firebase Realtime
-  Database instead of a local JSON file. If Firebase isn't configured, it
-  automatically falls back to the local JSON file — same pattern as the
-  Groq LLM fallback, so nothing breaks while you're setting it up.
+## What's built
+Full pipeline: validated input → rule engine → user memory → feature
+aggregation → Groq LLM reasoning → RAG grounding → confidence + pipeline
+visibility → Firebase persistence (with local JSON fallback).
 
-## Setup required for this phase (see step card above for the click-by-click version)
-1. Create a Firebase project + enable Realtime Database
-2. Download a service account key → save as `serviceAccountKey.json` in project root
-3. Add to `.env`:
-   ```
-   FIREBASE_CREDENTIALS_PATH=serviceAccountKey.json
-   FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
-   ```
-4. Restart the server — check the terminal for `[firebase] Connected successfully.`
-   If you see a fallback warning instead, it's using the local JSON file, which
-   is fine for continued testing.
+**This update adds:**
+- **Batch Risk Analyzer** — new mode (sidebar → "Batch Analysis"), upload a
+  CSV/JSON file of transactions, get a ranked risk table, summary insights,
+  and a CSV export. Uses a hybrid strategy: full LLM+RAG explanations only
+  for the top 5 riskiest transactions, fast rule-based text for the rest —
+  keeps large files from blowing through Groq's free-tier rate limits.
+- **Razorpay-aligned schema** — researched Razorpay's actual Payment entity;
+  `payment_type` now uses real values (`upi`, `card`, `netbanking`, `wallet`,
+  `emi`) instead of generic placeholders, and every transaction gets an
+  auto-generated `payment_id` (e.g. `pay_a1b2c3...`) for traceability.
+  Note: Razorpay's own API doesn't log IP/location in the core payment
+  object — that's captured separately by checkout SDKs — so our `location`
+  field is a reasonable custom addition, not a fabricated "official" field.
+- **Auto-detected location** — the Location field on the single-transaction
+  form now auto-fills with your real IP on page load (via a free geolocation
+  API), defaulting to an Indian IP if detection fails. Stays editable so you
+  can still manually test flagged/VPN locations for demos.
+- **Cleaned up stale "Phase X" labels** that were left in the UI/backend text
+  from earlier development phases.
 
 ## Project structure
 ```
 ai-risk-analyst/
 ├── backend/
-│   ├── main.py
-│   ├── models/transaction.py
+│   ├── main.py                   # routes: /, /analyze, /analyze_batch
+│   ├── models/transaction.py     # Razorpay-aligned schema
 │   ├── services/
 │   │   ├── rule_engine.py
-│   │   ├── profile_service.py   # now reads/writes Firebase OR local JSON
-│   │   ├── firebase_client.py   # NEW -- Firebase init, graceful fallback
+│   │   ├── profile_service.py
+│   │   ├── firebase_client.py
 │   │   ├── aggregator.py
-│   │   └── llm_engine.py
+│   │   ├── llm_engine.py
+│   │   └── batch_processor.py    # NEW -- CSV/JSON parsing, ranking, hybrid LLM, CSV export
 │   ├── routes/
 │   └── utils/
-├── templates/index.html
+├── templates/index.html          # now has singleView + batchView toggle
 ├── static/js/app.js
-├── memory/user_profiles.json    # fallback storage if Firebase not configured
-├── serviceAccountKey.json       # YOU add this, gitignored
+├── memory/user_profiles.json
+├── serviceAccountKey.json        # you add this (Firebase), gitignored
 ├── rag/
-├── tests/
+├── tests/sample_batch.csv        # NEW -- sample file to test batch mode
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
+## Batch file format
+CSV or JSON, one transaction per row/object:
+```
+user_id,amount,location,payment_type,timestamp
+USR-001,4500,103.21.58.10 (IN),upi,2026-08-23T14:30:00
+```
+`timestamp` is optional (defaults to now). Try `tests/sample_batch.csv` first.
+
 ## How to run
 ```bash
 cd ai-risk-analyst
 pip install -r requirements.txt
-cp .env.example .env      # add Groq key + Firebase config
+cp .env.example .env      # add Groq + Firebase config
 python backend/main.py
 ```
 Open **http://127.0.0.1:5000**
 
 ## Not built yet
-- Dynamic sidebar navigation (User Profiles / Fraud Insights / Logs pages currently static links)
-- Phase 8/9 polish: scripted test cases, final demo-ready writeup
+- Fully dynamic sidebar (User Profiles list, Logs history, Settings pages still static)
+- Scripted end-to-end test cases + final demo writeup (polish phase)

@@ -1,7 +1,8 @@
 """
-AI Risk Intelligence Engine - Phase 1
-Flask backend with validated transaction input (Pydantic) feeding a still-dummy
-risk response. Real detection logic (rules engine) arrives in Phase 2.
+AI Risk Intelligence Engine
+Flask backend: validated input -> rule engine -> user memory -> LLM reasoning
+(Groq) -> RAG grounding -> final risk decision. Also supports batch analysis
+of CSV/JSON transaction files via /analyze_batch.
 """
 
 import os
@@ -16,6 +17,7 @@ from services import profile_service
 from services.aggregator import aggregate
 from services import llm_engine
 from services import firebase_client
+from services import batch_processor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "rag"))
 from retriever import build_index, retrieve
@@ -68,7 +70,7 @@ def analyze():
         rag_context = retrieve(rag_query, top_k=2)
 
         explanation = llm_engine.generate_explanation(transaction, result, rag_context)
-        llm_actually_used = not explanation.startswith("PHASE 4 fallback")
+        llm_actually_used = not explanation.startswith("Rule-based summary")
 
         # Record this transaction into the user's profile AFTER scoring, so it doesn't score against itself
         profile_service.record_transaction(
@@ -102,6 +104,34 @@ def analyze():
             "error": "Server error while processing transaction",
             "details": [str(e)],
         }), 500
+
+
+@app.route("/analyze_batch", methods=["POST"])
+def analyze_batch():
+    """
+    Batch Risk Analyzer: accepts an uploaded CSV or JSON file of transactions,
+    scores all of them, ranks by risk, and returns results + a CSV export string.
+    Uses a hybrid LLM strategy (see batch_processor.py) to stay within Groq's
+    free-tier rate limits on larger files.
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded", "details": ["Attach a .csv or .json file under the 'file' field"]}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected", "details": []}), 400
+
+    try:
+        rows, parse_errors = batch_processor.parse_upload(file.filename, file.read())
+        if not rows:
+            return jsonify({"error": "Could not read any rows from file", "details": parse_errors}), 400
+
+        result = batch_processor.process_batch(rows)
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"[analyze_batch] Unexpected error: {e}")
+        return jsonify({"error": "Server error while processing batch", "details": [str(e)]}), 500
 
 
 if __name__ == "__main__":

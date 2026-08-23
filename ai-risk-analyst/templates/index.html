@@ -76,12 +76,16 @@
 <nav class="hidden md:flex bg-surface-container-low/80 backdrop-blur-xl w-[280px] h-screen sticky left-0 top-0 border-r border-white/10 shadow-2xl shadow-black/40 flex-col py-lg px-md gap-sm z-50">
 <div class="mb-lg">
 <h1 class="font-headline-sm text-headline-sm font-bold text-primary">Risk Engine</h1>
-<p class="text-on-surface-variant text-sm mt-1">V0.1 — Phase 0</p>
+<p class="text-on-surface-variant text-sm mt-1">v1.0 — Live</p>
 </div>
 <div class="flex flex-col gap-2">
-<a class="flex items-center gap-3 p-3 text-primary font-bold shadow-[0_0_15px_rgba(173,198,255,0.3)] bg-primary/10 rounded-lg scale-95 transition-all duration-200" href="#">
+<a id="navSingle" class="flex items-center gap-3 p-3 text-primary font-bold shadow-[0_0_15px_rgba(173,198,255,0.3)] bg-primary/10 rounded-lg scale-95 transition-all duration-200 cursor-pointer" data-view="single">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
 <span>Dashboard</span>
+</a>
+<a id="navBatch" class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg cursor-pointer" data-view="batch">
+<span class="material-symbols-outlined">upload_file</span>
+<span>Batch Analysis</span>
 </a>
 <a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
 <span class="material-symbols-outlined">analytics</span>
@@ -120,7 +124,7 @@
 <div class="flex items-center gap-6">
 <h2 class="font-headline-md text-headline-md font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">AI Risk Intelligence Engine</h2>
 <div class="hidden lg:flex items-center gap-4 ml-8">
-<span id="apiStatusLabel" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 text-sm font-medium">API: Not Connected (Phase 0)</span>
+<span id="apiStatusLabel" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 text-sm font-medium">API: Groq</span>
 <span id="systemHealthLabel" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 text-sm font-medium">System: Healthy</span>
 </div>
 </div>
@@ -138,8 +142,9 @@
 </div>
 </header>
 
-<main class="flex-1 p-gutter max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-gutter pb-xl">
+<main class="flex-1 p-gutter max-w-[1600px] mx-auto w-full pb-xl">
 
+<div id="singleView" class="grid grid-cols-12 gap-gutter">
 <div class="col-span-12 lg:col-span-3 flex flex-col gap-gutter">
 <div class="glass-panel rounded-xl p-md">
 <h3 class="font-headline-sm text-headline-sm mb-6 text-on-surface">Analyze Transaction</h3>
@@ -158,14 +163,16 @@
 </div>
 <div>
 <label class="font-label-caps text-label-caps text-on-surface-variant mb-1 block">LOCATION IP</label>
-<input id="inputLocation" class="glass-input w-full rounded-lg px-3 py-2 font-data-point text-data-point" type="text" value="192.168.1.1 (RU)"/>
+<input id="inputLocation" class="glass-input w-full rounded-lg px-3 py-2 font-data-point text-data-point" type="text" value="Detecting..."/>
 </div>
 <div>
 <label class="font-label-caps text-label-caps text-on-surface-variant mb-1 block">PAYMENT TYPE</label>
 <select id="inputPaymentType" class="glass-input w-full rounded-lg px-3 py-2 font-data-point text-data-point appearance-none">
-<option>Wire Transfer</option>
-<option>Crypto P2P</option>
-<option>Credit Card</option>
+<option value="upi">UPI</option>
+<option value="card">Card</option>
+<option value="netbanking">Netbanking</option>
+<option value="wallet">Wallet</option>
+<option value="emi">EMI</option>
 </select>
 </div>
 <button id="analyzeBtn" class="mt-4 bg-primary text-on-primary font-bold py-3 px-4 rounded-lg hover:bg-primary-fixed transition-all duration-200 shadow-[0_0_20px_rgba(173,198,255,0.4)] flex items-center justify-center gap-2" type="submit">
@@ -188,7 +195,7 @@
 <div id="riskScorePanel" class="glass-panel-danger rounded-xl p-xl flex flex-col items-center justify-center relative overflow-hidden h-[300px]">
 <div class="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-error via-background to-background"></div>
 <h3 id="riskStatusHeading" class="font-headline-sm text-headline-sm text-error mb-2 relative z-10">AWAITING ANALYSIS</h3>
-<p id="riskStatusSubtitle" class="text-on-surface-variant text-sm mb-6 relative z-10">Submit a transaction on the left to run Phase 0 detection.</p>
+<p id="riskStatusSubtitle" class="text-on-surface-variant text-sm mb-6 relative z-10">Submit a transaction on the left to run risk detection.</p>
 <span id="confidenceBadge" class="hidden text-xs font-bold px-2 py-1 rounded-full mb-3 relative z-10"></span>
 <div class="relative w-40 h-40 flex items-center justify-center z-10">
 <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
@@ -257,12 +264,65 @@ No analysis has been run yet. Fill in the transaction fields and click ANALYZE R
 FRAUD INTELLIGENCE CONTEXT
 </h3>
 <div id="ragContext" class="flex-1 overflow-y-auto pr-2 space-y-4">
-<p class="text-on-surface-variant text-sm">RAG grounding not wired yet — arrives in Phase 6.</p>
+<p class="text-on-surface-variant text-sm">Run an analysis to see relevant fraud intelligence.</p>
 </div>
 <button class="mt-4 w-full border border-white/20 text-on-surface py-2 rounded-lg hover:bg-white/5 transition-colors text-sm font-medium">
 View Full Dossier
 </button>
 </div>
+</div>
+
+</div>
+
+<div id="batchView" class="hidden flex flex-col gap-gutter">
+
+<div class="glass-panel rounded-xl p-md">
+<h3 class="font-headline-sm text-headline-sm mb-4 text-on-surface">Batch Risk Analyzer</h3>
+<p class="text-on-surface-variant text-sm mb-4">Upload a CSV or JSON file of transactions. Columns/fields expected: <span class="font-data-point text-data-point">user_id, amount, location, payment_type, timestamp</span> (timestamp optional).</p>
+<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+<input id="batchFileInput" type="file" accept=".csv,.json" class="glass-input rounded-lg px-3 py-2 text-sm flex-1"/>
+<button id="runBatchBtn" class="bg-primary text-on-primary font-bold py-2 px-4 rounded-lg hover:bg-primary-fixed transition-all duration-200 shadow-[0_0_20px_rgba(173,198,255,0.4)] flex items-center gap-2 whitespace-nowrap">
+<span class="material-symbols-outlined">radar</span>
+<span id="runBatchBtnLabel">RUN BATCH ANALYSIS</span>
+</button>
+</div>
+</div>
+
+<div id="batchSummaryPanel" class="hidden glass-panel rounded-xl p-md">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-4">SUMMARY INSIGHTS</h3>
+<ul id="batchSummaryList" class="flex flex-col gap-2 text-sm text-on-surface"></ul>
+</div>
+
+<div id="batchResultsPanel" class="hidden glass-panel rounded-xl p-md">
+<div class="flex flex-wrap justify-between items-center mb-4 gap-3">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant">RANKED RESULTS</h3>
+<div class="flex items-center gap-3">
+<label class="text-sm text-on-surface-variant flex items-center gap-2">
+<input id="batchFilterFlagged" type="checkbox" checked/> Flagged only (Review/Suspicious)
+</label>
+<button id="exportCsvBtn" class="border border-white/20 text-on-surface py-2 px-3 rounded-lg hover:bg-white/5 transition-colors text-sm font-medium flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">download</span> Export CSV
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+<thead>
+<tr class="text-left text-on-surface-variant border-b border-white/10">
+<th class="py-2 pr-4">Payment ID</th>
+<th class="py-2 pr-4">User</th>
+<th class="py-2 pr-4">Amount</th>
+<th class="py-2 pr-4">Method</th>
+<th class="py-2 pr-4">Score</th>
+<th class="py-2 pr-4">Status</th>
+<th class="py-2 pr-4">Confidence</th>
+</tr>
+</thead>
+<tbody id="batchResultsBody"></tbody>
+</table>
+</div>
+</div>
+
 </div>
 
 </main>

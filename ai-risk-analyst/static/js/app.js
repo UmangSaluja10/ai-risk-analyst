@@ -8,6 +8,113 @@ const analyzeBtn = document.getElementById("analyzeBtn");
 const analyzeBtnLabel = document.getElementById("analyzeBtnLabel");
 const liveFeed = document.getElementById("liveFeed");
 
+// View switching (Dashboard <-> Batch Analysis)
+const navSingle = document.getElementById("navSingle");
+const navBatch = document.getElementById("navBatch");
+const singleView = document.getElementById("singleView");
+const batchView = document.getElementById("batchView");
+
+function setActiveNav(activeEl, inactiveEl) {
+  activeEl.classList.add("text-primary", "font-bold", "bg-primary/10", "shadow-[0_0_15px_rgba(173,198,255,0.3)]", "scale-95");
+  activeEl.classList.remove("text-on-surface-variant");
+  inactiveEl.classList.remove("text-primary", "font-bold", "bg-primary/10", "shadow-[0_0_15px_rgba(173,198,255,0.3)]", "scale-95");
+  inactiveEl.classList.add("text-on-surface-variant");
+}
+
+navSingle.addEventListener("click", () => {
+  singleView.classList.remove("hidden");
+  batchView.classList.add("hidden");
+  setActiveNav(navSingle, navBatch);
+});
+
+navBatch.addEventListener("click", () => {
+  batchView.classList.remove("hidden");
+  singleView.classList.add("hidden");
+  setActiveNav(navBatch, navSingle);
+});
+
+// Batch Analysis logic
+let lastBatchResult = null;
+
+function renderBatchTable(showFlaggedOnly) {
+  const tbody = document.getElementById("batchResultsBody");
+  const rows = showFlaggedOnly ? lastBatchResult.flagged_only : lastBatchResult.results;
+  tbody.innerHTML = "";
+
+  const statusColor = { Suspicious: "text-error", Review: "text-tertiary", Cleared: "text-primary" };
+
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.className = "border-b border-white/5";
+    tr.innerHTML = `
+      <td class="py-2 pr-4 font-data-point text-data-point text-on-surface-variant">${r.payment_id}</td>
+      <td class="py-2 pr-4">${r.user_id}</td>
+      <td class="py-2 pr-4 font-data-point text-data-point">Rs.${r.amount.toLocaleString()}</td>
+      <td class="py-2 pr-4">${r.payment_type}</td>
+      <td class="py-2 pr-4 font-bold font-data-point ${statusColor[r.status] || ""}">${r.risk_score}</td>
+      <td class="py-2 pr-4 ${statusColor[r.status] || ""}">${r.status}</td>
+      <td class="py-2 pr-4">${r.confidence}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("runBatchBtn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("batchFileInput");
+  const btn = document.getElementById("runBatchBtn");
+  const btnLabel = document.getElementById("runBatchBtnLabel");
+
+  if (!fileInput.files.length) {
+    alert("Choose a CSV or JSON file first.");
+    return;
+  }
+
+  btn.disabled = true;
+  btnLabel.textContent = "PROCESSING...";
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  try {
+    const res = await fetch("/analyze_batch", { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(`Batch failed: ${data.error || "unknown error"}\n${(data.details || []).join("\n")}`);
+      return;
+    }
+
+    lastBatchResult = data;
+
+    const summaryList = document.getElementById("batchSummaryList");
+    summaryList.innerHTML = data.summary_insights.map((s) => `<li>- ${s}</li>`).join("");
+    document.getElementById("batchSummaryPanel").classList.remove("hidden");
+
+    document.getElementById("batchResultsPanel").classList.remove("hidden");
+    renderBatchTable(document.getElementById("batchFilterFlagged").checked);
+  } catch (err) {
+    alert("Error processing batch: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btnLabel.textContent = "RUN BATCH ANALYSIS";
+  }
+});
+
+document.getElementById("batchFilterFlagged").addEventListener("change", (e) => {
+  if (lastBatchResult) renderBatchTable(e.target.checked);
+});
+
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  if (!lastBatchResult) return;
+  const blob = new Blob([lastBatchResult.csv_export], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "risk_analysis_results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
 let requestCounter = 8820;
 
 // Default the timestamp field to "now" so the form isn't empty on load
@@ -17,6 +124,23 @@ if (tsInput && !tsInput.value) {
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   tsInput.value = now.toISOString().slice(0, 16);
 }
+
+// Auto-detect the real IP/location for a realistic default, but keep the field
+// editable so you can still manually test risky/VPN locations for demos.
+(async function detectLocation() {
+  const locationInput = document.getElementById("inputLocation");
+  try {
+    const res = await fetch("https://ipapi.co/json/");
+    const data = await res.json();
+    if (data && data.ip) {
+      locationInput.value = `${data.ip} (${data.country_code || "IN"})`;
+    } else {
+      locationInput.value = "103.21.58.10 (IN)"; // Indian IP fallback
+    }
+  } catch (err) {
+    locationInput.value = "103.21.58.10 (IN)"; // Indian IP fallback if detection fails/blocked
+  }
+})();
 
 function colorClass(color) {
   // maps backend "color" keys to Tailwind classes already defined in the design tokens

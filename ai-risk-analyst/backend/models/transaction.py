@@ -4,20 +4,25 @@ Every transaction that enters the pipeline is validated against this model
 before it reaches the rule engine (Phase 2) or anything downstream.
 """
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 
 
 class PaymentType(str, Enum):
-    WIRE_TRANSFER = "Wire Transfer"
-    CRYPTO_P2P = "Crypto P2P"
-    CREDIT_CARD = "Credit Card"
+    """Matches Razorpay's actual payment.method values."""
+    UPI = "upi"
+    CARD = "card"
+    NETBANKING = "netbanking"
+    WALLET = "wallet"
+    EMI = "emi"
 
 
 class Transaction(BaseModel):
+    payment_id: str = Field(default_factory=lambda: f"pay_{uuid.uuid4().hex[:14]}")
     user_id: str = Field(..., min_length=1, max_length=64)
-    amount: float = Field(..., gt=0, description="Transaction amount in USD, must be positive")
+    amount: float = Field(..., gt=0, description="Transaction amount in INR")
     location: str = Field(..., min_length=1, max_length=128, description="IP address or location string")
     payment_type: PaymentType
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -56,6 +61,8 @@ def parse_transaction(raw: dict) -> tuple[Transaction | None, list[str]]:
     cleaned = dict(raw)
     if "amount" in cleaned and isinstance(cleaned["amount"], str):
         cleaned["amount"] = cleaned["amount"].replace("₹", "").replace("$", "").replace(",", "").strip()
+    if "payment_type" in cleaned and isinstance(cleaned["payment_type"], str):
+        cleaned["payment_type"] = cleaned["payment_type"].strip().lower()
 
     try:
         return Transaction(**cleaned), []

@@ -58,7 +58,7 @@ Write the explanation now."""
 def generate_explanation(transaction, result: dict, rag_context: list[dict] | None = None) -> str:
     rag_context = rag_context or []
     api_key = os.environ.get("GROQ_API_KEY")
-    fallback = "PHASE 4 fallback (LLM not configured): " + " ".join(result["reasons"])
+    fallback = "Rule-based summary (LLM unavailable): " + " ".join(result["reasons"])
 
     if not api_key:
         return fallback
