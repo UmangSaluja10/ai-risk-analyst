@@ -1,83 +1,74 @@
 # AI Risk Intelligence Engine
 
-## Current status: Core pipeline complete + Batch Mode + polish pass
+## Current status: Full dynamic app — auth, live profiles, insights, logs, alerts
 
 ## What's built
-Full pipeline: validated input → rule engine → user memory → feature
-aggregation → Groq LLM reasoning → RAG grounding → confidence + pipeline
-visibility → Firebase persistence (with local JSON fallback).
+Full pipeline (validate → rules → memory → aggregate → LLM → RAG → decision)
++ Batch Mode + Firebase persistence, and now:
 
-**This update fixes:**
-- **Behavioral timing detection** — the old "10PM-6AM = suspicious" rule was
-  too blunt (flags legitimate night-shift workers, misses a normally-daytime
-  user transacting at 3AM). It now tracks each user's day/night transaction
-  split and flags DEVIATION from their own pattern, with a static fallback
-  for brand-new users with no history.
-- **Batch table now shows AI Insight** (explanation text) per row, not just score/status.
-- **Default User ID** in the single-transaction form now matches the batch sample file's naming (`USR-001`).
-- **Batch Risk Analyzer** — new mode (sidebar → "Batch Analysis"), upload a
-  CSV/JSON file of transactions, get a ranked risk table, summary insights,
-  and a CSV export. Uses a hybrid strategy: full LLM+RAG explanations only
-  for the top 5 riskiest transactions, fast rule-based text for the rest —
-  keeps large files from blowing through Groq's free-tier rate limits.
-- **Razorpay-aligned schema** — researched Razorpay's actual Payment entity;
-  `payment_type` now uses real values (`upi`, `card`, `netbanking`, `wallet`,
-  `emi`) instead of generic placeholders, and every transaction gets an
-  auto-generated `payment_id` (e.g. `pay_a1b2c3...`) for traceability.
-  Note: Razorpay's own API doesn't log IP/location in the core payment
-  object — that's captured separately by checkout SDKs — so our `location`
-  field is a reasonable custom addition, not a fabricated "official" field.
-- **Auto-detected location** — the Location field on the single-transaction
-  form now auto-fills with your real IP on page load (via a free geolocation
-  API), defaulting to an Indian IP if detection fails. Stays editable so you
-  can still manually test flagged/VPN locations for demos.
-- **Cleaned up stale "Phase X" labels** that were left in the UI/backend text
-  from earlier development phases.
+- **Login / Authentication** — hardcoded demo users, hashed passwords, Flask
+  sessions. All pages and API routes require login.
+  - `admin` / `admin123` (role: Admin)
+  - `analyst` / `analyst123` (role: Analyst)
+  - Change these in `backend/services/auth_service.py` before any real use.
+- **Transaction Logs** (new, foundational) — every single or batch analysis
+  is now persisted (Firebase or local JSON fallback, same pattern as
+  profiles). This feeds everything below.
+- **User Profiles page** — real per-user data: transaction count, avg amount,
+  flagged count, last active, and a mini bar-chart of their last 6 risk scores.
+- **Fraud Insights page** — dynamic, computed live from logged data: % of
+  transactions flagged, most common location among flagged transactions,
+  and the 4-hour window with the most flagged activity (e.g. "72% ... occur
+  between 1AM-5AM" style insight, generated from real data not hardcoded).
+- **Logs page** — searchable table of every processed transaction (search by
+  TX ID or User ID). The header search bar also jumps here and filters.
+- **Alerts** — bell icon now shows a real dropdown of the 5 most recent
+  Suspicious transactions, with an unread-style count badge.
+- **Settings page** — Groq/Firebase connection status, version, logged-in user.
 
 ## Project structure
 ```
 ai-risk-analyst/
 ├── backend/
-│   ├── main.py                   # routes: /, /analyze, /analyze_batch
-│   ├── models/transaction.py     # Razorpay-aligned schema
+│   ├── main.py                   # routes: /, /login, /logout, /analyze,
+│   │                              #   /analyze_batch, /logs, /profiles,
+│   │                              #   /insights, /system_status
+│   ├── models/transaction.py
 │   ├── services/
 │   │   ├── rule_engine.py
-│   │   ├── profile_service.py
-│   │   ├── firebase_client.py
+│   │   ├── profile_service.py    # + get_all_profiles()
+│   │   ├── firebase_client.py    # now manages 2 refs: profiles + logs
+│   │   ├── log_service.py        # NEW -- persistent transaction log
+│   │   ├── auth_service.py       # NEW -- hardcoded users, hashed passwords
 │   │   ├── aggregator.py
 │   │   ├── llm_engine.py
-│   │   └── batch_processor.py    # NEW -- CSV/JSON parsing, ranking, hybrid LLM, CSV export
+│   │   └── batch_processor.py    # now also writes to log_service
 │   ├── routes/
 │   └── utils/
-├── templates/index.html          # now has singleView + batchView toggle
+├── templates/
+│   ├── index.html                # singleView/batchView/logsView/profilesView/insightsView/settingsView
+│   └── login.html                # NEW
 ├── static/js/app.js
-├── memory/user_profiles.json
-├── serviceAccountKey.json        # you add this (Firebase), gitignored
+├── memory/
+│   ├── user_profiles.json
+│   └── transaction_logs.json     # NEW (local fallback)
 ├── rag/
-├── tests/sample_batch.csv        # NEW -- sample file to test batch mode
+├── tests/sample_batch.csv
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
-## Batch file format
-CSV or JSON, one transaction per row/object:
-```
-user_id,amount,location,payment_type,timestamp
-USR-001,4500,103.21.58.10 (IN),upi,2026-08-23T14:30:00
-```
-`timestamp` is optional (defaults to now). Try `tests/sample_batch.csv` first.
-
 ## How to run
 ```bash
 cd ai-risk-analyst
 pip install -r requirements.txt
-cp .env.example .env      # add Groq + Firebase config
+cp .env.example .env      # add Groq key, Firebase config, and a real SECRET_KEY
 python backend/main.py
 ```
-Open **http://127.0.0.1:5000**
+Open **http://127.0.0.1:5000** → you'll be redirected to `/login` first.
 
 ## Not built yet
-- Fully dynamic sidebar (User Profiles list, Logs history, Settings pages still static)
+- Per-user drill-down detail page (Profiles is currently a table, not clickable rows)
 - Scripted end-to-end test cases + final demo writeup (polish phase)

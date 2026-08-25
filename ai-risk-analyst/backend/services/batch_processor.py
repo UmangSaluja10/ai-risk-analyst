@@ -16,6 +16,7 @@ from services.rule_engine import evaluate
 from services import profile_service
 from services.aggregator import aggregate
 from services import llm_engine
+from services import log_service
 
 TOP_N_FOR_LLM = 5
 
@@ -113,10 +114,13 @@ def process_batch(rows: list[dict]) -> dict:
         else:
             item["explanation"] = " ".join(item["result"]["reasons"])
 
+        item["tx_id"] = log_service.record_log(item["transaction"], item["result"], item["explanation"])
+
     summary_insights = _summarize(scored)
 
     results = [
         {
+            "tx_id": s["tx_id"],
             "payment_id": s["transaction"].payment_id,
             "user_id": s["transaction"].user_id,
             "amount": s["transaction"].amount,
@@ -132,7 +136,7 @@ def process_batch(rows: list[dict]) -> dict:
 
     csv_buffer = io.StringIO()
     writer = csv.DictWriter(csv_buffer, fieldnames=[
-        "payment_id", "user_id", "amount", "location", "payment_type", "risk_score", "status", "confidence"
+        "tx_id", "payment_id", "user_id", "amount", "location", "payment_type", "risk_score", "status", "confidence"
     ])
     writer.writeheader()
     for r in results:

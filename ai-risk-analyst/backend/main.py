@@ -7,8 +7,9 @@ of CSV/JSON transaction files via /analyze_batch.
 
 import os
 import sys
+from functools import wraps
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
 
 from models.transaction import parse_transaction
@@ -18,6 +19,8 @@ from services.aggregator import aggregate
 from services import llm_engine
 from services import firebase_client
 from services import batch_processor
+from services import log_service
+from services import auth_service
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "rag"))
 from retriever import build_index, retrieve
@@ -36,14 +39,52 @@ app = Flask(
     template_folder="../templates",
     static_folder="../static",
 )
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-before-any-real-deployment")
+
+
+def login_required(view):
+    """Redirects page routes to /login; returns 401 JSON for API routes."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "username" not in session:
+            if request.path == "/" or request.path.startswith("/login"):
+                return redirect(url_for("login"))
+            return jsonify({"error": "Not authenticated"}), 401
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        id_token = data.get("id_token")
+        if not id_token:
+            return jsonify({"success": False, "error": "No ID token provided"}), 400
+
+        user = auth_service.verify_id_token(id_token)
+        if user:
+            session["username"] = user["username"]
+            session["role"] = user["role"]
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "Invalid or expired sign-in. Try again."}), 401
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/")
+@login_required
 def index():
-    return render_template("index.html")
+    return render_template("index.html", username=session.get("username"), role=session.get("role"))
 
 
 @app.route("/analyze", methods=["POST"])
+@login_required
 def analyze():
     """
     Validates the incoming transaction, runs the full pipeline (rules -> memory
@@ -80,8 +121,10 @@ def analyze():
         profile_service.record_transaction(
             transaction.user_id, transaction.amount, transaction.location, transaction.timestamp
         )
+        tx_id = log_service.record_log(transaction, result, explanation)
 
         response = {
+            "tx_id": tx_id,
             "risk_score": result["risk_score"],
             "status": result["status"],
             "confidence": result["confidence"],
@@ -111,6 +154,7 @@ def analyze():
 
 
 @app.route("/analyze_batch", methods=["POST"])
+@login_required
 def analyze_batch():
     """
     Batch Risk Analyzer: accepts an uploaded CSV or JSON file of transactions,
@@ -136,6 +180,95 @@ def analyze_batch():
     except Exception as e:
         print(f"[analyze_batch] Unexpected error: {e}")
         return jsonify({"error": "Server error while processing batch", "details": [str(e)]}), 500
+
+
+@app.route("/logs")
+@login_required
+def get_logs():
+    search = request.args.get("q", "").strip().lower()
+    logs = log_service.get_logs(limit=300)
+    if search:
+        logs = [l for l in logs if search in l["tx_id"].lower() or search in l["user_id"].lower()]
+    return jsonify({"logs": logs})
+
+
+@app.route("/profiles")
+@login_required
+def get_profiles():
+    profiles = profile_service.get_all_profiles()
+    logs = log_service.get_logs(limit=2000)
+
+    result = []
+    for user_id, profile in profiles.items():
+        user_logs = [l for l in logs if l["user_id"] == user_id]
+        user_logs.sort(key=lambda l: l["timestamp"])
+        flagged_count = sum(1 for l in user_logs if l["status"] in ("Suspicious", "Review"))
+        recent_scores = [l["risk_score"] for l in user_logs[-6:]]
+        last_active = user_logs[-1]["timestamp"] if user_logs else profile.get("first_seen")
+
+        result.append({
+            "user_id": user_id,
+            "transaction_count": profile.get("transaction_count", 0),
+            "avg_amount": profile.get("avg_amount", 0),
+            "flagged_count": flagged_count,
+            "last_active": last_active,
+            "recent_scores": recent_scores,
+        })
+
+    result.sort(key=lambda r: r["last_active"] or "", reverse=True)
+    return jsonify({"profiles": result})
+
+
+@app.route("/insights")
+@login_required
+def get_insights():
+    logs = log_service.get_logs(limit=1000)
+    total = len(logs)
+    flagged = [l for l in logs if l["status"] in ("Suspicious", "Review")]
+
+    flagged_pct = round(len(flagged) / total * 100, 1) if total else 0
+
+    location_counts = {}
+    for l in flagged:
+        location_counts[l["location"]] = location_counts.get(l["location"], 0) + 1
+    top_location = max(location_counts.items(), key=lambda x: x[1])[0] if location_counts else "N/A"
+
+    # Bucket flagged transactions into 4-hour windows to find the riskiest time band
+    windows = [(0, 4, "12AM-4AM"), (4, 8, "4AM-8AM"), (8, 12, "8AM-12PM"),
+               (12, 16, "12PM-4PM"), (16, 20, "4PM-8PM"), (20, 24, "8PM-12AM")]
+    window_counts = {label: 0 for _, _, label in windows}
+    for l in flagged:
+        try:
+            hour = int(l["timestamp"][11:13])
+        except (ValueError, IndexError):
+            continue
+        for start, end, label in windows:
+            if start <= hour < end:
+                window_counts[label] += 1
+                break
+    peak_window = max(window_counts.items(), key=lambda x: x[1])[0] if flagged else "N/A"
+
+    status_counts = {}
+    for l in logs:
+        status_counts[l["status"]] = status_counts.get(l["status"], 0) + 1
+
+    return jsonify({
+        "total_transactions": total,
+        "flagged_pct": flagged_pct,
+        "top_risky_location": top_location,
+        "peak_fraud_window": peak_window,
+        "status_counts": status_counts,
+    })
+
+
+@app.route("/system_status")
+@login_required
+def system_status():
+    return jsonify({
+        "groq_configured": bool(os.environ.get("GROQ_API_KEY")),
+        "firebase_connected": firebase_client.FIREBASE_ENABLED,
+        "version": "v1.0",
+    })
 
 
 if __name__ == "__main__":

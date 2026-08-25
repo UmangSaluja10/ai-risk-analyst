@@ -10,11 +10,12 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 FIREBASE_ENABLED = False
-_db_ref = None
+_profiles_ref = None
+_logs_ref = None
 
 
 def init_firebase():
-    global FIREBASE_ENABLED, _db_ref
+    global FIREBASE_ENABLED, _profiles_ref, _logs_ref
 
     cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH")
     database_url = os.environ.get("FIREBASE_DATABASE_URL")
@@ -31,12 +32,17 @@ def init_firebase():
     try:
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred, {"databaseURL": database_url})
-        _db_ref = db.reference("user_profiles")
+        _profiles_ref = db.reference("user_profiles")
+        _logs_ref = db.reference("transaction_logs")
         FIREBASE_ENABLED = True
-        print("[firebase] Connected successfully. Using Firebase Realtime Database for user profiles.")
+        print("[firebase] Connected successfully. Using Firebase Realtime Database.")
     except Exception as e:
         print(f"[firebase] Initialization failed: {e}. Falling back to local JSON storage.")
 
 
 def get_ref():
-    return _db_ref
+    return _profiles_ref
+
+
+def get_logs_ref():
+    return _logs_ref

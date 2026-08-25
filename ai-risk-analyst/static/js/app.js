@@ -8,29 +8,167 @@ const analyzeBtn = document.getElementById("analyzeBtn");
 const analyzeBtnLabel = document.getElementById("analyzeBtnLabel");
 const liveFeed = document.getElementById("liveFeed");
 
-// View switching (Dashboard <-> Batch Analysis)
-const navSingle = document.getElementById("navSingle");
-const navBatch = document.getElementById("navBatch");
-const singleView = document.getElementById("singleView");
-const batchView = document.getElementById("batchView");
+// View switching (generic, covers all sidebar views)
+const views = {
+  single: document.getElementById("singleView"),
+  batch: document.getElementById("batchView"),
+  logs: document.getElementById("logsView"),
+  profiles: document.getElementById("profilesView"),
+  insights: document.getElementById("insightsView"),
+  settings: document.getElementById("settingsView"),
+};
+const navLinks = {
+  single: document.getElementById("navSingle"),
+  batch: document.getElementById("navBatch"),
+  logs: document.getElementById("navLogs"),
+  profiles: document.getElementById("navProfiles"),
+  insights: document.getElementById("navInsights"),
+  settings: document.getElementById("navSettings"),
+};
 
-function setActiveNav(activeEl, inactiveEl) {
-  activeEl.classList.add("text-primary", "font-bold", "bg-primary/10", "shadow-[0_0_15px_rgba(173,198,255,0.3)]", "scale-95");
-  activeEl.classList.remove("text-on-surface-variant");
-  inactiveEl.classList.remove("text-primary", "font-bold", "bg-primary/10", "shadow-[0_0_15px_rgba(173,198,255,0.3)]", "scale-95");
-  inactiveEl.classList.add("text-on-surface-variant");
+function switchView(viewName) {
+  Object.entries(views).forEach(([name, el]) => {
+    if (!el) return;
+    el.classList.toggle("hidden", name !== viewName);
+  });
+  Object.entries(navLinks).forEach(([name, el]) => {
+    if (!el) return;
+    const active = name === viewName;
+    el.classList.toggle("text-primary", active);
+    el.classList.toggle("font-bold", active);
+    el.classList.toggle("bg-primary/10", active);
+    el.classList.toggle("shadow-[0_0_15px_rgba(173,198,255,0.3)]", active);
+    el.classList.toggle("scale-95", active);
+    el.classList.toggle("text-on-surface-variant", !active);
+  });
+
+  if (viewName === "logs") loadLogs();
+  if (viewName === "profiles") loadProfiles();
+  if (viewName === "insights") loadInsights();
+  if (viewName === "settings") loadSettings();
 }
 
-navSingle.addEventListener("click", () => {
-  singleView.classList.remove("hidden");
-  batchView.classList.add("hidden");
-  setActiveNav(navSingle, navBatch);
+Object.entries(navLinks).forEach(([name, el]) => {
+  if (el) el.addEventListener("click", () => switchView(name));
 });
 
-navBatch.addEventListener("click", () => {
-  batchView.classList.remove("hidden");
-  singleView.classList.add("hidden");
-  setActiveNav(navBatch, navSingle);
+switchView("single");
+
+// Logs view
+async function loadLogs(query) {
+  const q = query !== undefined ? query : document.getElementById("logsSearchInput").value;
+  const res = await fetch(`/logs?q=${encodeURIComponent(q || "")}`);
+  const data = await res.json();
+  const tbody = document.getElementById("logsTableBody");
+  const statusColor = { Suspicious: "text-error", Review: "text-tertiary", Cleared: "text-primary" };
+  tbody.innerHTML = (data.logs || [])
+    .map(
+      (l) => `
+    <tr class="border-b border-white/5">
+      <td class="py-2 pr-4 font-data-point text-data-point text-on-surface-variant">${l.tx_id}</td>
+      <td class="py-2 pr-4">${l.user_id}</td>
+      <td class="py-2 pr-4 font-data-point text-data-point">Rs.${l.amount.toLocaleString()}</td>
+      <td class="py-2 pr-4 font-bold font-data-point ${statusColor[l.status] || ""}">${l.risk_score}</td>
+      <td class="py-2 pr-4 ${statusColor[l.status] || ""}">${l.status}</td>
+      <td class="py-2 pr-4 text-on-surface-variant">${new Date(l.timestamp).toLocaleString()}</td>
+    </tr>`
+    )
+    .join("");
+}
+document.getElementById("logsSearchInput")?.addEventListener("input", (e) => loadLogs(e.target.value));
+
+// Profiles view
+async function loadProfiles() {
+  const res = await fetch("/profiles");
+  const data = await res.json();
+  const tbody = document.getElementById("profilesTableBody");
+  tbody.innerHTML = (data.profiles || [])
+    .map((p) => {
+      const bars = p.recent_scores
+        .map((s) => {
+          const color = s >= 60 ? "bg-error" : s >= 30 ? "bg-tertiary" : "bg-primary";
+          return `<div class="${color} w-1.5 rounded-t" style="height:${Math.max(s, 8)}%"></div>`;
+        })
+        .join("");
+      return `
+      <tr class="border-b border-white/5">
+        <td class="py-2 pr-4 font-data-point text-data-point">${p.user_id}</td>
+        <td class="py-2 pr-4">${p.transaction_count}</td>
+        <td class="py-2 pr-4 font-data-point text-data-point">Rs.${p.avg_amount.toLocaleString()}</td>
+        <td class="py-2 pr-4 ${p.flagged_count > 0 ? "text-error font-bold" : ""}">${p.flagged_count}</td>
+        <td class="py-2 pr-4 text-on-surface-variant">${p.last_active ? new Date(p.last_active).toLocaleDateString() : "--"}</td>
+        <td class="py-2 pr-4"><div class="flex items-end gap-0.5 h-8">${bars}</div></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+// Insights view
+async function loadInsights() {
+  const res = await fetch("/insights");
+  const data = await res.json();
+  document.getElementById("insightTotal").textContent = data.total_transactions;
+  document.getElementById("insightFlaggedPct").textContent = `${data.flagged_pct}%`;
+  document.getElementById("insightPeakWindow").textContent = data.peak_fraud_window;
+
+  const list = document.getElementById("insightsList");
+  const dynamicInsights = [
+    `${data.flagged_pct}% of all analyzed transactions were flagged as Review or Suspicious.`,
+    `Most flagged transactions cluster around the ${data.peak_fraud_window} window.`,
+    `${data.top_risky_location} is the most common location among flagged transactions.`,
+  ];
+  list.innerHTML = dynamicInsights.map((s) => `<li>- ${s}</li>`).join("");
+}
+
+// Settings view
+async function loadSettings() {
+  const res = await fetch("/system_status");
+  const data = await res.json();
+  document.getElementById("settingsVersion").textContent = data.version;
+  document.getElementById("settingsGroq").textContent = data.groq_configured ? "Connected" : "Not configured";
+  document.getElementById("settingsFirebase").textContent = data.firebase_connected ? "Connected" : "Using local JSON fallback";
+}
+
+// Alerts dropdown
+const alertsBellBtn = document.getElementById("alertsBellBtn");
+const alertsDropdown = document.getElementById("alertsDropdown");
+if (alertsBellBtn && alertsDropdown) {
+alertsBellBtn.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  const isHidden = alertsDropdown.classList.contains("hidden");
+  if (isHidden) {
+    const res = await fetch("/logs");
+    const data = await res.json();
+    const highRisk = (data.logs || []).filter((l) => l.status === "Suspicious").slice(0, 5);
+    const alertsList = document.getElementById("alertsList");
+    alertsList.innerHTML = highRisk.length
+      ? highRisk.map((l) => `<div class="text-sm border-b border-white/5 py-2"><span class="text-error font-bold">${l.tx_id}</span> flagged (High Risk) -- ${l.user_id}, Rs.${l.amount.toLocaleString()}</div>`).join("")
+      : '<p class="text-on-surface-variant text-sm py-2">No high-risk alerts.</p>';
+    const badge = document.getElementById("alertsBadge");
+    if (highRisk.length > 0) {
+      badge.textContent = highRisk.length;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+  alertsDropdown.classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (!alertsDropdown.contains(e.target) && e.target !== alertsBellBtn) {
+    alertsDropdown.classList.add("hidden");
+  }
+});
+}
+
+// Global search bar -> jumps to Logs view filtered
+document.getElementById("globalSearchInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const q = e.target.value;
+    switchView("logs");
+    document.getElementById("logsSearchInput").value = q;
+    loadLogs(q);
+  }
 });
 
 // Batch Analysis logic
@@ -60,7 +198,7 @@ function renderBatchTable(showFlaggedOnly) {
   });
 }
 
-document.getElementById("runBatchBtn").addEventListener("click", async () => {
+document.getElementById("runBatchBtn")?.addEventListener("click", async () => {
   const fileInput = document.getElementById("batchFileInput");
   const btn = document.getElementById("runBatchBtn");
   const btnLabel = document.getElementById("runBatchBtnLabel");
@@ -101,11 +239,11 @@ document.getElementById("runBatchBtn").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("batchFilterFlagged").addEventListener("change", (e) => {
+document.getElementById("batchFilterFlagged")?.addEventListener("change", (e) => {
   if (lastBatchResult) renderBatchTable(e.target.checked);
 });
 
-document.getElementById("exportCsvBtn").addEventListener("click", () => {
+document.getElementById("exportCsvBtn")?.addEventListener("click", () => {
   if (!lastBatchResult) return;
   const blob = new Blob([lastBatchResult.csv_export], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -115,8 +253,6 @@ document.getElementById("exportCsvBtn").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-
-let requestCounter = 8820;
 
 // Default the timestamp field to "now" so the form isn't empty on load
 const tsInput = document.getElementById("inputTimestamp");
@@ -200,8 +336,7 @@ function statusStyling(status) {
   }
 }
 
-function addFeedEntry(status) {
-  requestCounter += 1;
+function addFeedEntry(status, txId) {
   let badge = '<span class="text-xs text-primary bg-primary/10 px-2 py-1 rounded">CLEARED</span>';
   if (status === "Suspicious" || status === "Critical") {
     badge = '<span class="text-xs text-error bg-error/10 px-2 py-1 rounded">FLAGGED</span>';
@@ -215,7 +350,7 @@ function addFeedEntry(status) {
 
   const row = document.createElement("div");
   row.className = "flex justify-between items-center py-2 border-b border-white/5";
-  row.innerHTML = `<span class="font-data-point text-data-point text-on-surface-variant">TX-${requestCounter}</span>${badge}`;
+  row.innerHTML = `<span class="font-data-point text-data-point text-on-surface-variant">${txId || "TX-????"}</span>${badge}`;
   liveFeed.prepend(row);
 }
 
@@ -272,7 +407,7 @@ form.addEventListener("submit", async (e) => {
 
     statusStyling(data.status);
     renderFactors(data.factors || []);
-    addFeedEntry(data.status);
+    addFeedEntry(data.status, data.tx_id);
 
     const confBadge = document.getElementById("confidenceBadge");
     if (data.confidence) {

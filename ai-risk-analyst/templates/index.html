@@ -87,23 +87,19 @@
 <span class="material-symbols-outlined">upload_file</span>
 <span>Batch Analysis</span>
 </a>
-<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
-<span class="material-symbols-outlined">analytics</span>
-<span>Analyze Transaction</span>
-</a>
-<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
+<a id="navProfiles" class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg cursor-pointer" data-view="profiles">
 <span class="material-symbols-outlined">group</span>
 <span>User Profiles</span>
 </a>
-<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
+<a id="navInsights" class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg cursor-pointer" data-view="insights">
 <span class="material-symbols-outlined">security</span>
 <span>Fraud Insights</span>
 </a>
-<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
+<a id="navLogs" class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg cursor-pointer" data-view="logs">
 <span class="material-symbols-outlined">history</span>
 <span>Logs</span>
 </a>
-<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg" href="#">
+<a id="navSettings" class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all duration-200 rounded-lg cursor-pointer" data-view="settings">
 <span class="material-symbols-outlined">settings</span>
 <span>Settings</span>
 </a>
@@ -112,10 +108,13 @@
 <div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-white/10 flex items-center justify-center">
 <span class="material-symbols-outlined text-on-surface-variant">shield_person</span>
 </div>
-<div class="flex flex-col">
-<span class="font-bold text-sm">System Administrator</span>
-<span class="text-xs text-on-surface-variant">Admin</span>
+<div class="flex flex-col flex-1">
+<span class="font-bold text-sm">{{ username or "User" }}</span>
+<span class="text-xs text-on-surface-variant">{{ role or "" }}</span>
 </div>
+<a href="{{ url_for('logout') }}" class="text-on-surface-variant hover:text-error transition-colors" title="Log out">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+</a>
 </div>
 </nav>
 
@@ -131,11 +130,18 @@
 <div class="flex items-center gap-4">
 <div class="relative hidden md:block">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-<input class="glass-input pl-10 pr-4 py-2 rounded-full w-64 text-sm" placeholder="Search logs, IDs, rules..." type="text"/>
+<input id="globalSearchInput" class="glass-input pl-10 pr-4 py-2 rounded-full w-64 text-sm" placeholder="Search logs by TX ID or User ID..." type="text"/>
 </div>
-<button class="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<div class="relative">
+<button id="alertsBellBtn" class="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 relative">
 <span class="material-symbols-outlined">notifications</span>
+<span id="alertsBadge" class="hidden absolute top-1 right-1 bg-error text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center text-white"></span>
 </button>
+<div id="alertsDropdown" class="hidden absolute right-0 mt-2 w-80 glass-panel rounded-xl p-3 z-50">
+<h4 class="font-label-caps text-label-caps text-on-surface-variant mb-2 px-1">RECENT HIGH-RISK ALERTS</h4>
+<div id="alertsList" class="flex flex-col gap-1 max-h-72 overflow-y-auto"></div>
+</div>
+</div>
 <button class="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
 <span class="material-symbols-outlined">account_circle</span>
 </button>
@@ -324,6 +330,96 @@ View Full Dossier
 </div>
 </div>
 
+</div>
+
+<div id="logsView" class="hidden flex flex-col gap-gutter">
+<div class="glass-panel rounded-xl p-md">
+<div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Transaction Logs</h3>
+<input id="logsSearchInput" class="glass-input rounded-lg px-3 py-2 text-sm w-64" placeholder="Filter by TX ID or User ID..." type="text"/>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+<thead>
+<tr class="text-left text-on-surface-variant border-b border-white/10">
+<th class="py-2 pr-4">TX ID</th>
+<th class="py-2 pr-4">User</th>
+<th class="py-2 pr-4">Amount</th>
+<th class="py-2 pr-4">Score</th>
+<th class="py-2 pr-4">Status</th>
+<th class="py-2 pr-4">Timestamp</th>
+</tr>
+</thead>
+<tbody id="logsTableBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div id="profilesView" class="hidden flex flex-col gap-gutter">
+<div class="glass-panel rounded-xl p-md">
+<h3 class="font-headline-sm text-headline-sm mb-4 text-on-surface">User Profiles</h3>
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+<thead>
+<tr class="text-left text-on-surface-variant border-b border-white/10">
+<th class="py-2 pr-4">User ID</th>
+<th class="py-2 pr-4">Transactions</th>
+<th class="py-2 pr-4">Avg Amount</th>
+<th class="py-2 pr-4">Flagged</th>
+<th class="py-2 pr-4">Last Active</th>
+<th class="py-2 pr-4">Recent Trend</th>
+</tr>
+</thead>
+<tbody id="profilesTableBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div id="insightsView" class="hidden flex flex-col gap-gutter">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div class="glass-panel rounded-xl p-md">
+<span class="font-label-caps text-label-caps text-on-surface-variant">TOTAL ANALYZED</span>
+<div id="insightTotal" class="font-display-lg text-display-lg text-primary mt-2">--</div>
+</div>
+<div class="glass-panel rounded-xl p-md">
+<span class="font-label-caps text-label-caps text-on-surface-variant">FLAGGED RATE</span>
+<div id="insightFlaggedPct" class="font-display-lg text-display-lg text-error mt-2">--</div>
+</div>
+<div class="glass-panel rounded-xl p-md">
+<span class="font-label-caps text-label-caps text-on-surface-variant">PEAK FRAUD WINDOW</span>
+<div id="insightPeakWindow" class="font-headline-sm text-headline-sm text-tertiary mt-2">--</div>
+</div>
+</div>
+<div class="glass-panel rounded-xl p-md">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-3">DYNAMIC INSIGHTS</h3>
+<ul id="insightsList" class="flex flex-col gap-2 text-sm text-on-surface"></ul>
+</div>
+</div>
+
+<div id="settingsView" class="hidden flex flex-col gap-gutter">
+<div class="glass-panel rounded-xl p-md max-w-md">
+<h3 class="font-headline-sm text-headline-sm mb-4 text-on-surface">System Settings</h3>
+<div class="flex flex-col gap-3 text-sm">
+<div class="flex justify-between border-b border-white/5 pb-2">
+<span class="text-on-surface-variant">Version</span>
+<span id="settingsVersion" class="font-data-point text-data-point">--</span>
+</div>
+<div class="flex justify-between border-b border-white/5 pb-2">
+<span class="text-on-surface-variant">Groq LLM</span>
+<span id="settingsGroq" class="font-data-point text-data-point">--</span>
+</div>
+<div class="flex justify-between border-b border-white/5 pb-2">
+<span class="text-on-surface-variant">Firebase</span>
+<span id="settingsFirebase" class="font-data-point text-data-point">--</span>
+</div>
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Logged in as</span>
+<span class="font-data-point text-data-point">{{ username }} ({{ role }})</span>
+</div>
+</div>
+</div>
 </div>
 
 </main>

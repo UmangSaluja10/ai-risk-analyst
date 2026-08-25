@@ -46,6 +46,11 @@ def _safe_key(user_id: str) -> str:
     return user_id
 
 
+def get_all_profiles() -> dict:
+    """All stored profiles, keyed by sanitized user_id. Used by the User Profiles view."""
+    return _load_profiles()
+
+
 def get_profile(user_id: str) -> dict:
     profiles = _load_profiles()
     return profiles.get(_safe_key(user_id), {
