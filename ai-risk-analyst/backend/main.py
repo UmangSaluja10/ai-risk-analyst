@@ -218,6 +218,18 @@ def get_profiles():
     result.sort(key=lambda r: r["last_active"] or "", reverse=True)
     return jsonify({"profiles": result})
 
+@app.route("/config")
+def config():
+    return jsonify({
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+        "databaseURL": "https://ai-risk-analyst-default-rtdb.asia-southeast1.firebasedatabase.app",
+        "projectId": "ai-risk-analyst",
+        "storageBucket": "ai-risk-analyst.firebasestorage.app",
+        "messagingSenderId": "531384533391",
+        "appId": "1:531384533391:web:81d4d067cebc3072ad4bfa",
+    })
+
 
 @app.route("/insights")
 @login_required

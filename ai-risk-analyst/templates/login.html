@@ -41,16 +41,8 @@ LOG IN
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
-  // Firebase project config (safe to expose publicly -- not a secret).
-  const firebaseConfig = {
-    apiKey: "AIzaSyB6ZvYaZNVRk7L2WksVcS7e1g98Lso2ZfI",
-    authDomain: "ai-risk-analyst.firebaseapp.com",
-    databaseURL: "https://ai-risk-analyst-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "ai-risk-analyst",
-    storageBucket: "ai-risk-analyst.firebasestorage.app",
-    messagingSenderId: "531384533391",
-    appId: "1:531384533391:web:81d4d067cebc3072ad4bfa",
-  };
+(async () => {
+  const firebaseConfig = await fetch("/config").then(r => r.json());
   firebase.initializeApp(firebaseConfig);
 
   const loginForm = document.getElementById("loginForm");
@@ -75,6 +67,7 @@ LOG IN
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: idToken }),
       });
+
       const data = await res.json();
 
       if (data.success) {
@@ -83,14 +76,16 @@ LOG IN
         loginError.textContent = data.error || "Sign-in failed.";
         loginError.classList.remove("hidden");
       }
+
     } catch (err) {
-      loginError.textContent = err.message || "Sign-in failed. Check your email/password.";
+      loginError.textContent = err.message || "Sign-in failed.";
       loginError.classList.remove("hidden");
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "LOG IN";
     }
   });
+})();
 </script>
 </body>
 </html>
