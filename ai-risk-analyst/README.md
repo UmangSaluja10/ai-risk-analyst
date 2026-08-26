@@ -1,16 +1,41 @@
 # AI Risk Intelligence Engine
 
-## Current status: Full dynamic app — auth, live profiles, insights, logs, alerts
+## Current status: Full dynamic app — auth, live profiles, insights, logs, alerts, contextual risk scoring
+
+## Latest update: smarter location/timing/payment scoring
+- **Country-level location comparison, not exact-string.** Traveling to a
+  different city/state/country no longer triggers a penalty by itself —
+  only the *country* is compared against the user's usual country, so
+  normal travel is never flagged alone.
+- **New combined "Geographic & Payment Context" factor** replaces the old
+  flat "new location = penalty" rule. It only scores when signals combine
+  the way real fraud does:
+  - Two different countries within 12 hours ("impossible travel")
+  - An unusually large amount specifically for a *foreign* transaction
+  - UPI/Netbanking used from outside the user's usual country (these are
+    largely India-only rails — cards are the normal method for genuine
+    overseas spend, so cards get little/no extra weight, wallets a little
+    more, UPI/Netbanking the most)
+- **Timezone honesty:** personalized day/night timing checks now only run
+  for domestic (same-country) transactions. For foreign transactions, true
+  local time can't be reliably inferred from a single ambiguous timestamp
+  field, so that check is skipped rather than guessed — a documented
+  limitation, not silently wrong behavior.
+- Amount scoring (personalized vs. user's own average) already worked this
+  way since Phase 7 — unchanged.
 
 ## What's built
 Full pipeline (validate → rules → memory → aggregate → LLM → RAG → decision)
 + Batch Mode + Firebase persistence, and now:
 
-- **Login / Authentication** — hardcoded demo users, hashed passwords, Flask
-  sessions. All pages and API routes require login.
-  - `admin` / `admin123` (role: Admin)
-  - `analyst` / `analyst123` (role: Analyst)
-  - Change these in `backend/services/auth_service.py` before any real use.
+- **Login / Authentication (Firebase Auth)** — email/password sign-in via
+  Firebase Authentication. The login page uses the Firebase client SDK to
+  sign in, then sends the ID token to the backend for verification
+  (Firebase Admin SDK). `umangsaluja99@gmail.com` is hardcoded as Admin in
+  `backend/services/auth_service.py`; any other authenticated email gets
+  the Analyst role. **Requires** creating that user in Firebase Console →
+  Authentication → Users, and pasting your Web App config into `login.html`
+  (see setup steps above — the API key there is safe to expose publicly).
 - **Transaction Logs** (new, foundational) — every single or batch analysis
   is now persisted (Firebase or local JSON fallback, same pattern as
   profiles). This feeds everything below.

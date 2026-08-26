@@ -54,6 +54,19 @@ def login_required(view):
     return wrapped
 
 
+@app.route("/config")
+def config():
+    return jsonify({
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+        "databaseURL": "https://ai-risk-analyst-default-rtdb.asia-southeast1.firebasedatabase.app",
+        "projectId": "ai-risk-analyst",
+        "storageBucket": "ai-risk-analyst.firebasestorage.app",
+        "messagingSenderId": "531384533391",
+        "appId": "1:531384533391:web:81d4d067cebc3072ad4bfa",
+    })
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -102,14 +115,10 @@ def analyze():
 
     try:
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(
-            transaction,
-            user_avg=profile_before["avg_amount"] or None,
-            user_day_ratio=profile_service.get_day_ratio(profile_before),
-        )
-        profile_eval = profile_service.evaluate_against_profile(transaction.user_id, transaction.location)
+        rule_result = evaluate(transaction, profile_before)
+        is_new_user = profile_before["transaction_count"] == 0
 
-        result = aggregate(rule_result, profile_eval, profile_before["transaction_count"])
+        result = aggregate(rule_result, is_new_user, profile_before["transaction_count"])
 
         rag_query = " ".join(result["reasons"]) + f" location {transaction.location} payment {transaction.payment_type.value}"
         rag_context = retrieve(rag_query, top_k=2)
@@ -217,18 +226,6 @@ def get_profiles():
 
     result.sort(key=lambda r: r["last_active"] or "", reverse=True)
     return jsonify({"profiles": result})
-
-@app.route("/config")
-def config():
-    return jsonify({
-        "apiKey": os.getenv("FIREBASE_API_KEY"),
-        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
-        "databaseURL": "https://ai-risk-analyst-default-rtdb.asia-southeast1.firebasedatabase.app",
-        "projectId": "ai-risk-analyst",
-        "storageBucket": "ai-risk-analyst.firebasestorage.app",
-        "messagingSenderId": "531384533391",
-        "appId": "1:531384533391:web:81d4d067cebc3072ad4bfa",
-    })
 
 
 @app.route("/insights")

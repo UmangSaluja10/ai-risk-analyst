@@ -41,9 +41,11 @@ LOG IN
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
-(async () => {
-  const firebaseConfig = await fetch("/config").then(r => r.json());
-  firebase.initializeApp(firebaseConfig);
+  // Fetch Firebase config from the backend (keeps it out of the template source)
+  const firebaseReady = (async () => {
+    const firebaseConfig = await fetch("/config").then((r) => r.json());
+    firebase.initializeApp(firebaseConfig);
+  })();
 
   const loginForm = document.getElementById("loginForm");
   const loginError = document.getElementById("loginError");
@@ -59,6 +61,7 @@ LOG IN
     const password = document.getElementById("loginPassword").value;
 
     try {
+      await firebaseReady; // make sure firebase.initializeApp() has completed
       const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
       const idToken = await cred.user.getIdToken();
 
@@ -67,7 +70,6 @@ LOG IN
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: idToken }),
       });
-
       const data = await res.json();
 
       if (data.success) {
@@ -76,16 +78,14 @@ LOG IN
         loginError.textContent = data.error || "Sign-in failed.";
         loginError.classList.remove("hidden");
       }
-
     } catch (err) {
-      loginError.textContent = err.message || "Sign-in failed.";
+      loginError.textContent = err.message || "Sign-in failed. Check your email/password.";
       loginError.classList.remove("hidden");
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "LOG IN";
     }
   });
-})();
 </script>
 </body>
 </html>

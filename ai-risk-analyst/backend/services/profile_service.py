@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timezone
 
 from services import firebase_client
+from services.rule_engine import extract_country
 
 PROFILE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "memory", "user_profiles.json")
 
@@ -61,6 +62,9 @@ def get_profile(user_id: str) -> dict:
         "first_seen": None,
         "day_count": 0,
         "night_count": 0,
+        "country_counts": {},
+        "last_location": None,
+        "last_timestamp": None,
     })
 
 
@@ -72,35 +76,6 @@ def get_day_ratio(profile: dict) -> float | None:
     if total == 0:
         return None
     return day / total
-
-
-def evaluate_against_profile(user_id: str, location: str) -> dict:
-    """
-    Phase 7: amount deviation is now handled inside rule_engine.score_amount
-    (dynamic, personalized). This function only checks location novelty, so
-    it isn't double-counted.
-    """
-    profile = get_profile(user_id)
-
-    if profile["transaction_count"] == 0:
-        return {
-            "location_score": 0,
-            "location_reason": "New user -- no prior location history",
-            "is_new_user": True,
-        }
-
-    if location not in profile["locations"]:
-        location_score = 20
-        location_reason = "First transaction from this location for this user"
-    else:
-        location_score = 0
-        location_reason = "Location matches user's known locations"
-
-    return {
-        "location_score": location_score,
-        "location_reason": location_reason,
-        "is_new_user": False,
-    }
 
 
 def record_transaction(user_id: str, amount: float, location: str, timestamp: datetime) -> None:
@@ -115,6 +90,9 @@ def record_transaction(user_id: str, amount: float, location: str, timestamp: da
         "first_seen": timestamp.isoformat(),
         "day_count": 0,
         "night_count": 0,
+        "country_counts": {},
+        "last_location": None,
+        "last_timestamp": None,
     })
 
     profile["transaction_count"] += 1
@@ -129,6 +107,17 @@ def record_transaction(user_id: str, amount: float, location: str, timestamp: da
         profile["day_count"] = profile.get("day_count", 0) + 1
     else:
         profile["night_count"] = profile.get("night_count", 0) + 1
+
+    country = extract_country(location)
+    if country:
+        country_counts = profile.get("country_counts", {})
+        country_counts[country] = country_counts.get(country, 0) + 1
+        profile["country_counts"] = country_counts
+
+    # Snapshot of THIS transaction, read as "last_location"/"last_timestamp"
+    # by the NEXT transaction's impossible-travel check.
+    profile["last_location"] = location
+    profile["last_timestamp"] = timestamp.isoformat()
 
     profiles[key] = profile
     _save_profiles(profiles)

@@ -85,13 +85,9 @@ def process_batch(rows: list[dict]) -> dict:
             continue
 
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(
-            transaction,
-            user_avg=profile_before["avg_amount"] or None,
-            user_day_ratio=profile_service.get_day_ratio(profile_before),
-        )
-        profile_eval = profile_service.evaluate_against_profile(transaction.user_id, transaction.location)
-        result = aggregate(rule_result, profile_eval, profile_before["transaction_count"])
+        rule_result = evaluate(transaction, profile_before)
+        is_new_user = profile_before["transaction_count"] == 0
+        result = aggregate(rule_result, is_new_user, profile_before["transaction_count"])
 
         # Record immediately so later rows for the same user see an updated average
         profile_service.record_transaction(
