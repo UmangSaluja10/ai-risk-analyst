@@ -2,7 +2,52 @@
 
 ## Current status: Full dynamic app — auth, live profiles, insights, logs, alerts, contextual risk scoring
 
-## Latest update: smarter location/timing/payment scoring
+## Latest update: Pattern Intelligence Engine
+The system now learns from what it flags, not just applying fixed rules:
+- **Pattern learning** (`backend/services/pattern_engine.py`) — every flagged
+  transaction is broken into condition tags (`high_amount`, `odd_hour`,
+  `foreign_location`, `impossible_travel`, `upi_or_netbanking_abroad`,
+  `rapid_repeated_transactions`, `new_user`, etc). Recurring COMBINATIONS of
+  2+ tags become a stored pattern (`P-101`, etc.) with a frequency and weight.
+- **Pattern matching** — new transactions are checked against stored
+  patterns; a match adds a "Pattern Match" factor to the score and a
+  specific explanation ("Matched Pattern P-101, seen in 12 previous flagged
+  cases") — real explainability, not a generic reason string.
+- **Pattern evolution** — weight increases each time a pattern recurs, and
+  decays exponentially (14-day half-life) if unused, so stale patterns
+  naturally fade rather than permanently inflating scores.
+- **Feedback loop** — Logs page has a "Mark False Positive" button per
+  flagged transaction; this directly weakens the matching pattern's weight,
+  so the system gets less aggressive about patterns that turn out to be
+  noise.
+- **Fraud clustering / Top Patterns** — new table on the Fraud Insights page
+  showing all learned patterns, their conditions, frequency, and current
+  (decayed) weight.
+- **Behavior drift detection** — new "Behavior Drift" factor in
+  `rule_engine.py` looks at a user's last 3 transactions as a TREND (not a
+  single-transaction anomaly): a sustained shift in amount or a run of
+  transactions all from outside their usual country, which a one-off
+  anomaly check would miss.
+- **Real-time feed simulation** — the Dashboard's Live Feed panel now polls
+  every 8 seconds for new transactions system-wide (not just ones you
+  personally submitted), so it reflects batch runs and other analysts' work
+  too, capped to the most recent 8 entries.
+- **Signup + IP geolocation fallback** carried over from the prior update (see below).
+
+## Previous update: Signup + IP geolocation fallback
+- **Location extraction now handles bare IPs.** Previously, an IP without a
+  manually-typed `(XX)` country suffix (e.g. `34.21.9.50` instead of
+  `34.21.9.50 (US)`) silently skipped all geo scoring — which is what real
+  transaction logs look like, so this was a real gap. `extract_country()`
+  now falls back to a live IP geolocation lookup (ipapi.co, cached per-IP,
+  2-second timeout, never crashes the request if it fails/times out).
+- **Login page now has a Signup tab.** Uses Firebase's
+  `createUserWithEmailAndPassword`. No backend changes needed — role
+  assignment already happens server-side by matching the signed-in email
+  against `ADMIN_EMAILS`, so every signup is automatically a standard
+  (Analyst) account regardless of what the user does client-side.
+
+## Previous update: smarter location/timing/payment scoring
 - **Country-level location comparison, not exact-string.** Traveling to a
   different city/state/country no longer triggers a penalty by itself —
   only the *country* is compared against the user's usual country, so

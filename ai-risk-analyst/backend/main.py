@@ -21,6 +21,8 @@ from services import firebase_client
 from services import batch_processor
 from services import log_service
 from services import auth_service
+from services import pattern_engine
+from services import aggregator
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "rag"))
 from retriever import build_index, retrieve
@@ -115,8 +117,14 @@ def analyze():
 
     try:
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(transaction, profile_before)
+        recent_user_logs = log_service.get_logs_for_user(transaction.user_id, limit=10)
+        rule_result = evaluate(transaction, profile_before, recent_user_logs)
         is_new_user = profile_before["transaction_count"] == 0
+
+        conditions = pattern_engine.extract_conditions(transaction, rule_result, profile_before, recent_user_logs)
+        matches = pattern_engine.match_patterns(conditions)
+        pattern_score, pattern_reason = pattern_engine.score_from_matches(matches)
+        rule_result = aggregator.apply_pattern_match(rule_result, pattern_score, pattern_reason)
 
         result = aggregate(rule_result, is_new_user, profile_before["transaction_count"])
 
@@ -126,11 +134,14 @@ def analyze():
         explanation = llm_engine.generate_explanation(transaction, result, rag_context)
         llm_actually_used = not explanation.startswith("Rule-based summary")
 
+        # Learn/reinforce the pattern now that we have a final status
+        pattern_engine.record_pattern(conditions, result["status"])
+
         # Record this transaction into the user's profile AFTER scoring, so it doesn't score against itself
         profile_service.record_transaction(
             transaction.user_id, transaction.amount, transaction.location, transaction.timestamp
         )
-        tx_id = log_service.record_log(transaction, result, explanation)
+        tx_id = log_service.record_log(transaction, result, explanation, conditions)
 
         response = {
             "tx_id": tx_id,
@@ -139,6 +150,7 @@ def analyze():
             "confidence": result["confidence"],
             "explanation": explanation,
             "factors": result["factors"],
+            "matched_patterns": [{"pattern_id": m["pattern_id"], "frequency": m["frequency"]} for m in matches[:2]],
             "profile": {
                 "avg_amount": profile_before["avg_amount"],
                 "transaction_count": profile_before["transaction_count"],
@@ -150,6 +162,7 @@ def analyze():
                 "user_profiling": True,
                 "llm_reasoning": llm_actually_used,
                 "rag": len(rag_context) > 0,
+                "pattern_intelligence": True,
             },
         }
         return jsonify(response)
@@ -189,6 +202,29 @@ def analyze_batch():
     except Exception as e:
         print(f"[analyze_batch] Unexpected error: {e}")
         return jsonify({"error": "Server error while processing batch", "details": [str(e)]}), 500
+
+
+@app.route("/feedback/false_positive", methods=["POST"])
+@login_required
+def feedback_false_positive():
+    data = request.get_json(silent=True) or {}
+    tx_id = data.get("tx_id")
+    if not tx_id:
+        return jsonify({"error": "tx_id required"}), 400
+
+    log_entry = log_service.get_log_by_tx_id(tx_id)
+    if not log_entry:
+        return jsonify({"error": "Transaction not found"}), 404
+
+    pattern_engine.mark_false_positive_by_conditions(log_entry.get("conditions", []))
+    log_service.mark_feedback(tx_id, "false_positive")
+    return jsonify({"success": True})
+
+
+@app.route("/patterns")
+@login_required
+def get_patterns():
+    return jsonify({"patterns": pattern_engine.get_top_patterns(limit=15)})
 
 
 @app.route("/logs")

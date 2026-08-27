@@ -6,6 +6,7 @@ Thresholds are sensible defaults -- tune the constants below once you have real 
 
 import re
 from datetime import datetime
+import requests
 
 RISKY_LOCATION_KEYWORDS = ["RU", "NG", "unknown", "vpn", "tor"]
 
@@ -15,11 +16,47 @@ ODD_HOUR_END = 6     # 6 AM
 FOREIGN_AMOUNT_MULTIPLIER = 2  # higher bar than the domestic 1.5x -- foreign + big spend together is the real signal
 IMPOSSIBLE_TRAVEL_HOURS = 12   # two different countries within this window is physically implausible
 
+_ip_country_cache: dict[str, str | None] = {}
+
+_PRIVATE_IP_PREFIXES = ("10.", "172.16.", "192.168.", "127.")
+
+
+def _lookup_ip_country(ip: str) -> str | None:
+    """Server-side geolocation fallback for raw IPs with no '(XX)' annotation. Cached, short timeout, never raises."""
+    if ip in _ip_country_cache:
+        return _ip_country_cache[ip]
+    if ip.startswith(_PRIVATE_IP_PREFIXES):
+        _ip_country_cache[ip] = None
+        return None
+    try:
+        resp = requests.get(f"https://ipapi.co/{ip}/country/", timeout=2)
+        code = resp.text.strip().upper()
+        result = code if len(code) == 2 and code.isalpha() else None
+    except Exception:
+        result = None
+    _ip_country_cache[ip] = result
+    return result
+
 
 def extract_country(location: str) -> str | None:
-    """Pulls a country code out of strings like '144.16.21.239 (IN)'."""
-    match = re.search(r"\(([A-Za-z]{2,3})\)", location or "")
-    return match.group(1).upper() if match else None
+    """
+    Pulls a country code out of a location string. First tries the explicit
+    '(XX)' annotation format (fast, no network). If the string is just a bare
+    IP with no annotation -- which is what real transaction logs look like --
+    falls back to a live geolocation lookup.
+    """
+    if not location:
+        return None
+
+    match = re.search(r"\(([A-Za-z]{2,3})\)", location)
+    if match:
+        return match.group(1).upper()
+
+    ip_match = re.search(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", location)
+    if ip_match:
+        return _lookup_ip_country(ip_match.group(1))
+
+    return None
 
 DEVIATION_MULTIPLIER = 1.5  # ratio above user's own average where dynamic scoring kicks in
 
@@ -150,12 +187,53 @@ def score_geo_context(transaction, profile_before: dict) -> tuple[int, str]:
     return min(score, 60), " ".join(reasons)
 
 
-def evaluate(transaction, profile_before: dict) -> dict:
+def score_behavior_drift(profile_before: dict, recent_user_logs: list[dict]) -> tuple[int, str]:
+    """
+    Different from the single-transaction amount/geo checks: this looks at a
+    SUSTAINED shift across the user's last few transactions, not one outlier.
+    A single big purchase isn't drift; three big purchases in a row is.
+    recent_user_logs is expected NEWEST-FIRST (as log_service.get_logs_for_user returns).
+    """
+    if profile_before.get("transaction_count", 0) < 3 or len(recent_user_logs) < 3:
+        return 0, "Not enough history yet to assess behavior drift."
+
+    recent = recent_user_logs[:3]  # most recent 3 (list is newest-first)
+    drift_score = 0
+    reasons = []
+
+    historical_avg = profile_before.get("avg_amount", 0)
+    recent_avg = sum(r["amount"] for r in recent) / len(recent)
+    if historical_avg > 0 and recent_avg > historical_avg * 2:
+        drift_score += 12
+        reasons.append(
+            f"This user's last {len(recent)} transactions average Rs.{recent_avg:,.2f}, "
+            f"over 2x their long-term average (Rs.{historical_avg:,.2f}) -- a sustained shift, not a one-off."
+        )
+
+    home_country = _majority_country(profile_before.get("country_counts", {}))
+    recent_countries = [extract_country(r["location"]) for r in recent]
+    if home_country and recent_countries and all(c and c != home_country for c in recent_countries):
+        drift_score += 15
+        reasons.append(
+            f"This user's last {len(recent)} transactions were ALL from outside their usual country "
+            f"({home_country}) -- a sustained location shift, not a single trip."
+        )
+
+    if drift_score == 0:
+        return 0, "No sustained behavior drift detected."
+    return min(drift_score, 25), " ".join(reasons)
+
+
+def evaluate(transaction, profile_before: dict, recent_user_logs: list[dict] | None = None) -> dict:
     """
     Runs all rules against a validated Transaction object, using the user's
     prior profile for personalized/contextual scoring (amount deviation,
-    behavioral timing, and combined geographic+payment context).
+    behavioral timing, combined geographic+payment context, and drift).
+    recent_user_logs: this user's last ~10 log entries, NEWEST FIRST (as
+    returned by log_service.get_logs_for_user), used for behavior-drift
+    detection. Pass None/[] if unavailable.
     """
+    recent_user_logs = recent_user_logs or []
     user_avg = profile_before.get("avg_amount") or None
     amount_score, amount_reason = score_amount(transaction.amount, user_avg)
 
@@ -176,8 +254,9 @@ def evaluate(transaction, profile_before: dict) -> dict:
 
     geo_score, geo_reason = score_geo_context(transaction, profile_before)
     location_flag_score, location_flag_reason = score_location(transaction.location)
+    drift_score, drift_reason = score_behavior_drift(profile_before, recent_user_logs)
 
-    total_score = min(amount_score + time_score + geo_score + location_flag_score, 100)
+    total_score = min(amount_score + time_score + geo_score + location_flag_score + drift_score, 100)
 
     if total_score >= 60:
         status = "Suspicious"
@@ -191,11 +270,12 @@ def evaluate(transaction, profile_before: dict) -> dict:
         {"label": "Unusual Transaction Timing", "score": time_score, "color": "tertiary", "reason": time_reason},
         {"label": "Geographic & Payment Context", "score": geo_score, "color": "tertiary", "reason": geo_reason},
         {"label": "High-Risk Location", "score": location_flag_score, "color": "primary", "reason": location_flag_reason},
+        {"label": "Behavior Drift", "score": drift_score, "color": "error", "reason": drift_reason},
     ]
 
     reasons = [f["reason"] for f in factors if f["score"] > 0]
     if not reasons:
-        reasons = ["No anomalies detected across amount, timing, location, or payment context."]
+        reasons = ["No anomalies detected across amount, timing, location, payment context, or behavior drift."]
 
     return {
         "risk_score": total_score,

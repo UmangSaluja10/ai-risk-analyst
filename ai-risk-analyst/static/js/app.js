@@ -62,8 +62,14 @@ async function loadLogs(query) {
   const tbody = document.getElementById("logsTableBody");
   const statusColor = { Suspicious: "text-error", Review: "text-tertiary", Cleared: "text-primary" };
   tbody.innerHTML = (data.logs || [])
-    .map(
-      (l) => `
+    .map((l) => {
+      const canFlag = (l.status === "Suspicious" || l.status === "Review") && l.feedback !== "false_positive";
+      const feedbackCell = l.feedback === "false_positive"
+        ? '<span class="text-xs text-on-surface-variant">Marked FP</span>'
+        : canFlag
+        ? `<button class="fp-btn text-xs border border-white/20 rounded px-2 py-1 hover:bg-white/5" data-tx-id="${l.tx_id}">Mark False Positive</button>`
+        : "";
+      return `
     <tr class="border-b border-white/5">
       <td class="py-2 pr-4 font-data-point text-data-point text-on-surface-variant">${l.tx_id}</td>
       <td class="py-2 pr-4">${l.user_id}</td>
@@ -71,9 +77,28 @@ async function loadLogs(query) {
       <td class="py-2 pr-4 font-bold font-data-point ${statusColor[l.status] || ""}">${l.risk_score}</td>
       <td class="py-2 pr-4 ${statusColor[l.status] || ""}">${l.status}</td>
       <td class="py-2 pr-4 text-on-surface-variant">${new Date(l.timestamp).toLocaleString()}</td>
-    </tr>`
-    )
+      <td class="py-2 pr-4">${feedbackCell}</td>
+    </tr>`;
+    })
     .join("");
+
+  tbody.querySelectorAll(".fp-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Marking...";
+      try {
+        await fetch("/feedback/false_positive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx_id: btn.dataset.txId }),
+        });
+        loadLogs(q);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Mark False Positive";
+      }
+    });
+  });
 }
 document.getElementById("logsSearchInput")?.addEventListener("input", (e) => loadLogs(e.target.value));
 
@@ -118,6 +143,25 @@ async function loadInsights() {
     `${data.top_risky_location} is the most common location among flagged transactions.`,
   ];
   list.innerHTML = dynamicInsights.map((s) => `<li>- ${s}</li>`).join("");
+
+  const patternsRes = await fetch("/patterns");
+  const patternsData = await patternsRes.json();
+  const patternsBody = document.getElementById("patternsTableBody");
+  const riskColor = { High: "text-error", Medium: "text-tertiary", Low: "text-primary" };
+  patternsBody.innerHTML = (patternsData.patterns || []).length
+    ? patternsData.patterns
+        .map(
+          (p) => `
+    <tr class="border-b border-white/5">
+      <td class="py-2 pr-4 font-data-point text-data-point text-on-surface-variant">${p.pattern_id}</td>
+      <td class="py-2 pr-4 text-xs">${p.conditions.join(", ")}</td>
+      <td class="py-2 pr-4 ${riskColor[p.risk_level] || ""}">${p.risk_level}</td>
+      <td class="py-2 pr-4">${p.frequency}x</td>
+      <td class="py-2 pr-4 font-data-point text-data-point">${p.effective_weight}</td>
+    </tr>`
+        )
+        .join("")
+    : '<tr><td colspan="5" class="py-3 text-on-surface-variant text-sm">No patterns learned yet -- they form automatically as flagged transactions accumulate.</td></tr>';
 }
 
 // Settings view
@@ -336,7 +380,11 @@ function statusStyling(status) {
   }
 }
 
+const shownTxIds = new Set();
+
 function addFeedEntry(status, txId) {
+  if (txId) shownTxIds.add(txId);
+
   let badge = '<span class="text-xs text-primary bg-primary/10 px-2 py-1 rounded">CLEARED</span>';
   if (status === "Suspicious" || status === "Critical") {
     badge = '<span class="text-xs text-error bg-error/10 px-2 py-1 rounded">FLAGGED</span>';
@@ -352,7 +400,27 @@ function addFeedEntry(status, txId) {
   row.className = "flex justify-between items-center py-2 border-b border-white/5";
   row.innerHTML = `<span class="font-data-point text-data-point text-on-surface-variant">${txId || "TX-????"}</span>${badge}`;
   liveFeed.prepend(row);
+
+  while (liveFeed.children.length > 8) {
+    liveFeed.removeChild(liveFeed.lastChild);
+  }
 }
+
+// Real-Time Risk Feed simulation: polls for ANY new transaction system-wide
+// (not just ones you submitted), so the Live Feed panel reflects activity
+// from batch runs or other analysts too, not just your own single-tx clicks.
+async function pollLiveFeed() {
+  try {
+    const res = await fetch("/logs");
+    const data = await res.json();
+    const newOnes = (data.logs || []).filter((l) => !shownTxIds.has(l.tx_id));
+    newOnes.reverse().forEach((l) => addFeedEntry(l.status, l.tx_id));
+  } catch (err) {
+    // silent -- polling failures shouldn't interrupt the UI
+  }
+}
+setInterval(pollLiveFeed, 8000);
+pollLiveFeed();
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -428,6 +496,7 @@ form.addEventListener("submit", async (e) => {
         user_profiling: "User Profiling",
         llm_reasoning: "LLM Reasoning",
         rag: "RAG",
+        pattern_intelligence: "Pattern Intelligence",
       };
       pipelineContainer.innerHTML = Object.entries(data.pipeline)
         .map(([key, ran]) => {

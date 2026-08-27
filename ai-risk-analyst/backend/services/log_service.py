@@ -38,7 +38,7 @@ def _save(data: dict) -> None:
         json.dump(data, f, indent=2, default=str)
 
 
-def record_log(transaction, result: dict, explanation: str) -> str:
+def record_log(transaction, result: dict, explanation: str, conditions: list[str] | None = None) -> str:
     data = _load()
     data["counter"] = data.get("counter", 0) + 1
     tx_id = f"TX-{9000 + data['counter']}"
@@ -56,6 +56,8 @@ def record_log(transaction, result: dict, explanation: str) -> str:
         "confidence": result["confidence"],
         "timestamp": transaction.timestamp.isoformat(),
         "explanation": explanation[:300],
+        "conditions": conditions or [],
+        "feedback": None,
     }
 
     if len(entries) > MAX_LOGS:
@@ -77,3 +79,31 @@ def get_logs(limit: int = 200) -> list[dict]:
 
 def get_logs_for_user(user_id: str, limit: int = 100) -> list[dict]:
     return [e for e in get_logs(limit=5000) if e["user_id"] == user_id][:limit]
+
+
+def get_log_by_tx_id(tx_id: str) -> dict | None:
+    data = _load()
+    return data.get("entries", {}).get(tx_id)
+
+
+def mark_feedback(tx_id: str, feedback: str) -> bool:
+    """feedback: 'false_positive' (currently the only supported value)."""
+    data = _load()
+    entries = data.get("entries", {})
+    if tx_id not in entries:
+        return False
+    entries[tx_id]["feedback"] = feedback
+    data["entries"] = entries
+    _save(data)
+    return True
+
+
+def update_log_explanation(tx_id: str, explanation: str) -> bool:
+    data = _load()
+    entries = data.get("entries", {})
+    if tx_id not in entries:
+        return False
+    entries[tx_id]["explanation"] = explanation[:300]
+    data["entries"] = entries
+    _save(data)
+    return True

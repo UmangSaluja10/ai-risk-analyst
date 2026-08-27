@@ -8,6 +8,39 @@ since that's now handled inside rule_engine itself.
 """
 
 
+def apply_pattern_match(rule_result: dict, pattern_score: int, pattern_reason: str) -> dict:
+    """
+    Adds the Pattern Intelligence factor on top of the base rule_result and
+    recomputes the final score/status. Kept as a separate step (not baked
+    into rule_engine.evaluate) so pattern matching stays a distinct,
+    swappable layer -- e.g. easy to disable/AB-test independently of the
+    core rules.
+    """
+    total_score = min(rule_result["risk_score"] + pattern_score, 100)
+
+    if total_score >= 60:
+        status = "Suspicious"
+    elif total_score >= 30:
+        status = "Review"
+    else:
+        status = "Cleared"
+
+    factors = list(rule_result["factors"]) + [
+        {"label": "Pattern Match", "score": pattern_score, "color": "error", "reason": pattern_reason},
+    ]
+
+    reasons = list(rule_result["reasons"])
+    if pattern_score > 0:
+        reasons.append(pattern_reason)
+
+    return {
+        "risk_score": total_score,
+        "status": status,
+        "factors": factors,
+        "reasons": reasons,
+    }
+
+
 def _compute_confidence(profile_transaction_count: int, triggered_factor_count: int) -> str:
     """
     Confidence reflects how much we actually know about this user, not how

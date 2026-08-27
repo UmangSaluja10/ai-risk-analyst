@@ -11,15 +11,22 @@
   .glass-panel { background: rgba(19, 27, 46, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
   .glass-input { background: rgba(6, 14, 32, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); color: #dae2fd; color-scheme: dark; }
   .glass-input:focus { border-color: #adc6ff; outline: none; box-shadow: 0 0 10px rgba(173, 198, 255, 0.2); }
+  .tab-active { color: #adc6ff; border-bottom: 2px solid #adc6ff; }
+  .tab-inactive { color: #8b90a0; border-bottom: 2px solid transparent; }
 </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 <div class="glass-panel rounded-xl p-8 w-full max-w-sm">
 <h1 class="text-2xl font-bold text-blue-300 mb-1">Risk Engine</h1>
-<p class="text-sm text-gray-400 mb-6">Sign in to continue</p>
 
-<div id="loginError" class="hidden bg-red-500/10 border border-red-400/30 text-red-300 text-sm rounded-lg px-3 py-2 mb-4"></div>
+<div class="flex gap-6 mt-4 mb-6 text-sm font-bold">
+<button id="tabLogin" class="tab-active pb-2 cursor-pointer">Log In</button>
+<button id="tabSignup" class="tab-inactive pb-2 cursor-pointer">Sign Up</button>
+</div>
 
+<div id="authError" class="hidden bg-red-500/10 border border-red-400/30 text-red-300 text-sm rounded-lg px-3 py-2 mb-4"></div>
+
+<!-- Log In form -->
 <form id="loginForm" class="flex flex-col gap-4">
 <div>
 <label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Email</label>
@@ -34,10 +41,30 @@ LOG IN
 </button>
 </form>
 
-<p class="text-xs text-gray-500 mt-6">Sign in with a Firebase Authentication account (Email/Password).</p>
+<!-- Sign Up form -->
+<form id="signupForm" class="hidden flex-col gap-4">
+<div>
+<label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Email</label>
+<input id="signupEmail" type="email" required class="glass-input w-full rounded-lg px-3 py-2 text-sm"/>
+</div>
+<div>
+<label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Password</label>
+<input id="signupPassword" type="password" required minlength="6" class="glass-input w-full rounded-lg px-3 py-2 text-sm"/>
+</div>
+<div>
+<label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Confirm Password</label>
+<input id="signupPasswordConfirm" type="password" required minlength="6" class="glass-input w-full rounded-lg px-3 py-2 text-sm"/>
+</div>
+<button id="signupSubmitBtn" type="submit" class="mt-2 bg-blue-300 text-blue-950 font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-all">
+CREATE ACCOUNT
+</button>
+<p class="text-xs text-gray-500">New accounts are created with standard (Analyst) access.</p>
+</form>
+
+<p class="text-xs text-gray-500 mt-6">Powered by Firebase Authentication.</p>
 </div>
 
-<!-- Firebase client SDK (for email/password sign-in only -- the actual admin work happens on the backend) -->
+<!-- Firebase client SDK (for email/password sign-in/signup only -- the actual admin work happens on the backend) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
@@ -47,43 +74,93 @@ LOG IN
     firebase.initializeApp(firebaseConfig);
   })();
 
+  const authError = document.getElementById("authError");
+  const tabLogin = document.getElementById("tabLogin");
+  const tabSignup = document.getElementById("tabSignup");
   const loginForm = document.getElementById("loginForm");
-  const loginError = document.getElementById("loginError");
-  const submitBtn = document.getElementById("loginSubmitBtn");
+  const signupForm = document.getElementById("signupForm");
+
+  function showTab(tab) {
+    authError.classList.add("hidden");
+    const isLogin = tab === "login";
+    loginForm.classList.toggle("hidden", !isLogin);
+    loginForm.classList.toggle("flex", isLogin);
+    signupForm.classList.toggle("hidden", isLogin);
+    signupForm.classList.toggle("flex", !isLogin);
+    tabLogin.classList.toggle("tab-active", isLogin);
+    tabLogin.classList.toggle("tab-inactive", !isLogin);
+    tabSignup.classList.toggle("tab-active", !isLogin);
+    tabSignup.classList.toggle("tab-inactive", isLogin);
+  }
+  tabLogin.addEventListener("click", () => showTab("login"));
+  tabSignup.addEventListener("click", () => showTab("signup"));
+
+  async function establishSession(firebaseUser) {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = "/";
+    } else {
+      throw new Error(data.error || "Sign-in failed.");
+    }
+  }
 
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    loginError.classList.add("hidden");
-    submitBtn.disabled = true;
-    submitBtn.textContent = "SIGNING IN...";
+    authError.classList.add("hidden");
+    const btn = document.getElementById("loginSubmitBtn");
+    btn.disabled = true;
+    btn.textContent = "SIGNING IN...";
 
     const email = document.getElementById("loginEmail").value;
     const password = document.getElementById("loginPassword").value;
 
     try {
-      await firebaseReady; // make sure firebase.initializeApp() has completed
+      await firebaseReady;
       const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
-      const idToken = await cred.user.getIdToken();
-
-      const res = await fetch("/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_token: idToken }),
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        window.location.href = "/";
-      } else {
-        loginError.textContent = data.error || "Sign-in failed.";
-        loginError.classList.remove("hidden");
-      }
+      await establishSession(cred.user);
     } catch (err) {
-      loginError.textContent = err.message || "Sign-in failed. Check your email/password.";
-      loginError.classList.remove("hidden");
+      authError.textContent = err.message || "Sign-in failed. Check your email/password.";
+      authError.classList.remove("hidden");
     } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "LOG IN";
+      btn.disabled = false;
+      btn.textContent = "LOG IN";
+    }
+  });
+
+  signupForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    authError.classList.add("hidden");
+    const btn = document.getElementById("signupSubmitBtn");
+
+    const email = document.getElementById("signupEmail").value;
+    const password = document.getElementById("signupPassword").value;
+    const confirm = document.getElementById("signupPasswordConfirm").value;
+
+    if (password !== confirm) {
+      authError.textContent = "Passwords do not match.";
+      authError.classList.remove("hidden");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "CREATING ACCOUNT...";
+
+    try {
+      await firebaseReady;
+      const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+      await establishSession(cred.user);
+    } catch (err) {
+      authError.textContent = err.message || "Could not create account.";
+      authError.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "CREATE ACCOUNT";
     }
   });
 </script>

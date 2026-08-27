@@ -12,10 +12,11 @@ from firebase_admin import credentials, db
 FIREBASE_ENABLED = False
 _profiles_ref = None
 _logs_ref = None
+_patterns_ref = None
 
 
 def init_firebase():
-    global FIREBASE_ENABLED, _profiles_ref, _logs_ref
+    global FIREBASE_ENABLED, _profiles_ref, _logs_ref, _patterns_ref
 
     cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH")
     database_url = os.environ.get("FIREBASE_DATABASE_URL")
@@ -34,6 +35,7 @@ def init_firebase():
         firebase_admin.initialize_app(cred, {"databaseURL": database_url})
         _profiles_ref = db.reference("user_profiles")
         _logs_ref = db.reference("transaction_logs")
+        _patterns_ref = db.reference("fraud_patterns")
         FIREBASE_ENABLED = True
         print("[firebase] Connected successfully. Using Firebase Realtime Database.")
     except Exception as e:
@@ -46,3 +48,7 @@ def get_ref():
 
 def get_logs_ref():
     return _logs_ref
+
+
+def get_patterns_ref():
+    return _patterns_ref

@@ -14,9 +14,10 @@ import json
 from models.transaction import parse_transaction
 from services.rule_engine import evaluate
 from services import profile_service
-from services.aggregator import aggregate
+from services.aggregator import aggregate, apply_pattern_match
 from services import llm_engine
 from services import log_service
+from services import pattern_engine
 
 TOP_N_FOR_LLM = 5
 
@@ -85,16 +86,34 @@ def process_batch(rows: list[dict]) -> dict:
             continue
 
         profile_before = profile_service.get_profile(transaction.user_id)
-        rule_result = evaluate(transaction, profile_before)
+        # Logging happens immediately per row (not deferred) so that repeat
+        # users LATER in this same file correctly see EARLIER rows via
+        # get_logs_for_user -- needed for rapid-transaction / drift detection
+        # to work within a single batch file, not just across separate runs.
+        recent_user_logs = log_service.get_logs_for_user(transaction.user_id, limit=10)
+
+        rule_result = evaluate(transaction, profile_before, recent_user_logs)
         is_new_user = profile_before["transaction_count"] == 0
+
+        conditions = pattern_engine.extract_conditions(transaction, rule_result, profile_before, recent_user_logs)
+        matches = pattern_engine.match_patterns(conditions)
+        pattern_score, pattern_reason = pattern_engine.score_from_matches(matches)
+        rule_result = apply_pattern_match(rule_result, pattern_score, pattern_reason)
+
         result = aggregate(rule_result, is_new_user, profile_before["transaction_count"])
+        pattern_engine.record_pattern(conditions, result["status"])
 
         # Record immediately so later rows for the same user see an updated average
         profile_service.record_transaction(
             transaction.user_id, transaction.amount, transaction.location, transaction.timestamp
         )
 
-        scored.append({"transaction": transaction, "result": result})
+        # Log immediately with the fast rule-based explanation; upgraded to a
+        # full LLM explanation below for the top-N riskiest transactions.
+        initial_explanation = " ".join(result["reasons"])
+        tx_id = log_service.record_log(transaction, result, initial_explanation, conditions)
+
+        scored.append({"transaction": transaction, "result": result, "tx_id": tx_id, "explanation": initial_explanation})
 
     # Rank riskiest first
     scored.sort(key=lambda s: s["result"]["risk_score"], reverse=True)
@@ -107,10 +126,7 @@ def process_batch(rows: list[dict]) -> dict:
             rag_query = " ".join(item["result"]["reasons"]) + f" location {item['transaction'].location}"
             rag_context = retrieve(rag_query, top_k=1)
             item["explanation"] = llm_engine.generate_explanation(item["transaction"], item["result"], rag_context)
-        else:
-            item["explanation"] = " ".join(item["result"]["reasons"])
-
-        item["tx_id"] = log_service.record_log(item["transaction"], item["result"], item["explanation"])
+            log_service.update_log_explanation(item["tx_id"], item["explanation"])
 
     summary_insights = _summarize(scored)
 
