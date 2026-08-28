@@ -37,7 +37,7 @@ function switchView(viewName) {
     el.classList.toggle("text-primary", active);
     el.classList.toggle("font-bold", active);
     el.classList.toggle("bg-primary/10", active);
-    el.classList.toggle("shadow-[0_0_15px_rgba(173,198,255,0.3)]", active);
+    el.classList.toggle("shadow-[0_0_15px_rgba(95,214,190,0.3)]", active);
     el.classList.toggle("scale-95", active);
     el.classList.toggle("text-on-surface-variant", !active);
   });
@@ -326,9 +326,9 @@ if (tsInput && !tsInput.value) {
 function colorClass(color) {
   // maps backend "color" keys to Tailwind classes already defined in the design tokens
   const map = {
-    error: { text: "text-error", bar: "bg-error", glow: "shadow-[0_0_10px_rgba(255,180,171,0.5)]" },
-    tertiary: { text: "text-tertiary", bar: "bg-tertiary", glow: "shadow-[0_0_10px_rgba(255,181,149,0.5)]" },
-    primary: { text: "text-primary", bar: "bg-primary", glow: "shadow-[0_0_10px_rgba(173,198,255,0.5)]" },
+    error: { text: "text-error", bar: "bg-error", glow: "shadow-[0_0_10px_rgba(255,144,134,0.5)]" },
+    tertiary: { text: "text-tertiary", bar: "bg-tertiary", glow: "shadow-[0_0_10px_rgba(240,184,102,0.5)]" },
+    primary: { text: "text-primary", bar: "bg-primary", glow: "shadow-[0_0_10px_rgba(95,214,190,0.5)]" },
   };
   return map[color] || map.primary;
 }
@@ -366,17 +366,17 @@ function statusStyling(status) {
     panel.classList.add("glass-panel-danger");
     heading.classList.add("text-error");
     scoreValue.classList.add("text-error");
-    circle.setAttribute("stroke", "#ffb4ab");
+    circle.setAttribute("stroke", "#FF9086");
   } else if (status === "Review") {
     panel.classList.add("glass-panel-danger");
     heading.classList.add("text-tertiary");
     scoreValue.classList.add("text-tertiary");
-    circle.setAttribute("stroke", "#ffb595");
+    circle.setAttribute("stroke", "#F0B866");
   } else {
     panel.classList.add("glass-panel-safe");
     heading.classList.add("text-primary");
     scoreValue.classList.add("text-primary");
-    circle.setAttribute("stroke", "#adc6ff");
+    circle.setAttribute("stroke", "#5FD6BE");
   }
 }
 

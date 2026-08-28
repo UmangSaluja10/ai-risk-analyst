@@ -7,17 +7,28 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
 <style>
-  body { background: #0b1326; color: #dae2fd; font-family: 'Inter', sans-serif; }
-  .glass-panel { background: rgba(19, 27, 46, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-  .glass-input { background: rgba(6, 14, 32, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); color: #dae2fd; color-scheme: dark; }
-  .glass-input:focus { border-color: #adc6ff; outline: none; box-shadow: 0 0 10px rgba(173, 198, 255, 0.2); }
-  .tab-active { color: #adc6ff; border-bottom: 2px solid #adc6ff; }
-  .tab-inactive { color: #8b90a0; border-bottom: 2px solid transparent; }
+  body { background: #0c1210; color: #dce7e1; font-family: 'Inter', sans-serif; }
+  .glass-panel { background: rgba(18, 24, 21, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+  .glass-input { background: rgba(9, 13, 12, 0.92) !important; border: 1px solid rgba(255, 255, 255, 0.12) !important; color: #f0f5f3 !important; color-scheme: dark; }
+  .glass-input::placeholder { color: rgba(240, 245, 243, 0.4) !important; }
+  .glass-input:focus { border-color: #5FD6BE !important; outline: none; box-shadow: 0 0 10px rgba(95, 214, 190, 0.2); }
+  .glass-input:-webkit-autofill,
+  .glass-input:-webkit-autofill:hover,
+  .glass-input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px rgba(9, 13, 12, 0.98) inset !important;
+    -webkit-text-fill-color: #f0f5f3 !important;
+    caret-color: #f0f5f3;
+  }
+  .tab-active { color: #5FD6BE; border-bottom: 2px solid #5FD6BE; }
+  .tab-inactive { color: #869a91; border-bottom: 2px solid transparent; }
+  .text-teal-accent { color: #5FD6BE; }
+  .bg-teal-accent { background-color: #5FD6BE; }
+  .text-teal-accent-ink { color: #003729; }
 </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 <div class="glass-panel rounded-xl p-8 w-full max-w-sm">
-<h1 class="text-2xl font-bold text-blue-300 mb-1">Risk Engine</h1>
+<h1 class="text-2xl font-bold text-teal-accent mb-1">Risk Engine</h1>
 
 <div class="flex gap-6 mt-4 mb-6 text-sm font-bold">
 <button id="tabLogin" class="tab-active pb-2 cursor-pointer">Log In</button>
@@ -36,7 +47,7 @@
 <label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Password</label>
 <input id="loginPassword" type="password" required class="glass-input w-full rounded-lg px-3 py-2 text-sm"/>
 </div>
-<button id="loginSubmitBtn" type="submit" class="mt-2 bg-blue-300 text-blue-950 font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-all">
+<button id="loginSubmitBtn" type="submit" class="mt-2 bg-teal-accent text-teal-accent-ink font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-all">
 LOG IN
 </button>
 </form>
@@ -55,7 +66,7 @@ LOG IN
 <label class="text-xs uppercase tracking-wide text-gray-400 mb-1 block">Confirm Password</label>
 <input id="signupPasswordConfirm" type="password" required minlength="6" class="glass-input w-full rounded-lg px-3 py-2 text-sm"/>
 </div>
-<button id="signupSubmitBtn" type="submit" class="mt-2 bg-blue-300 text-blue-950 font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-all">
+<button id="signupSubmitBtn" type="submit" class="mt-2 bg-teal-accent text-teal-accent-ink font-bold py-2 px-4 rounded-lg hover:opacity-90 transition-all">
 CREATE ACCOUNT
 </button>
 <p class="text-xs text-gray-500">New accounts are created with standard (Analyst) access.</p>
