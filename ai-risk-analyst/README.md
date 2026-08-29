@@ -4,7 +4,7 @@ A hybrid fraud-risk analysis platform for digital payments, built around
 explainability first: every score comes with a specific, human-readable
 reason, not a black-box number.
 
-**🔗 Live demo: [PASTE-YOUR-RENDER-URL-HERE]** — see "Try It Yourself" below
+**🔗 Live demo: https://ai-risk-analyst.onrender.com/login — see "Try It Yourself" below
 for demo credentials and example transactions to run.
 
 > Note: hosted on Render's free tier, which spins down after ~15 minutes of
