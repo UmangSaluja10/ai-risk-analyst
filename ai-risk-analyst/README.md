@@ -4,6 +4,13 @@ A hybrid fraud-risk analysis platform for digital payments, built around
 explainability first: every score comes with a specific, human-readable
 reason, not a black-box number.
 
+**🔗 Live demo: [PASTE-YOUR-RENDER-URL-HERE]** — see "Try It Yourself" below
+for demo credentials and example transactions to run.
+
+> Note: hosted on Render's free tier, which spins down after ~15 minutes of
+> inactivity. First load after idle time can take 30-60 seconds to wake up —
+> that's normal, not a bug.
+
 ## The problem
 
 Payment fraud detection tools tend to fall into two failure modes: pure
@@ -69,6 +76,53 @@ including a live "which modules actually ran" pipeline indicator.
 | Auth | Firebase Authentication |
 | Frontend | HTML/CSS (Tailwind) + vanilla JS, server-rendered via Jinja |
 
+## Try It Yourself
+
+Sign up for your own account on the live demo (Signup tab on the login
+page) — new accounts get standard (Analyst) access automatically. Or ask
+for a demo login if one's been shared with you.
+
+A few example transactions to try, each showing a different part of the
+system (values are illustrative — exact scores depend on prior history in
+the demo database):
+
+| Scenario | User ID | Amount (₹) | Location | Payment Type | What it shows |
+|---|---|---|---|---|---|
+| Normal transaction | `DEMO-001` | 800 | `103.21.58.10 (IN)` | UPI | Low score, "Cleared" |
+| Large amount | `DEMO-001` | 150000 | `103.21.58.10 (IN)` | Card | Amount Anomaly factor, scaled to your own history |
+| Foreign + risky method | `DEMO-002` | 45000 | `34.21.9.50` (US) | UPI | Geographic & Payment Context — UPI abroad is flagged harder than card would be |
+| High-risk location | `DEMO-003` | 5000 | `192.168.1.1 (RU)` | Netbanking | High-Risk Location factor (VPN/known-risky region) |
+
+Try submitting `DEMO-001`'s large-amount transaction 2-3 times in a row —
+watch the Confidence badge climb from Low to Medium/High as the system
+builds up history on that user. Then check **Fraud Insights → Top Fraud
+Patterns** after a few flagged transactions to see the Pattern Intelligence
+Engine at work, and try **Batch Analysis** with `tests/sample_batch.csv`.
+
+See `DEMO_SCRIPT.md` for a full guided walkthrough and `TESTING_CHECKLIST.md`
+for exhaustive test coverage.
+
+## Deployment
+
+Deployed as a single Flask app on Render (backend renders the frontend
+directly via Jinja templates — not a separate static frontend, so it's one
+deployment, not two). To deploy your own copy:
+
+1. Push this repo to GitHub (`.gitignore` already excludes secrets)
+2. Render → New → Web Service → connect the repo (auto-detects `render.yaml`)
+3. Set environment variables in the Render dashboard: `GROQ_API_KEY`,
+   `FIREBASE_DATABASE_URL`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`,
+   `SECRET_KEY`, and `FIREBASE_CREDENTIALS_JSON` (paste your entire
+   `serviceAccountKey.json` file's contents as this one variable — Render
+   doesn't support uploading files directly)
+4. After deploy, add the Render URL to Firebase Console → Authentication →
+   Settings → Authorized domains, or login will fail
+
+**Important:** Firebase must be fully connected in production — if it falls
+back to local JSON storage, that data is wiped on every restart/redeploy
+since Render's filesystem is ephemeral. Check the deploy logs for
+`[firebase] Connected successfully`.
+
 ## Setup
 
 ```bash
@@ -126,6 +180,8 @@ ai-risk-analyst/
 ├── tests/sample_batch.csv        # sample file for testing batch mode
 ├── TESTING_CHECKLIST.md
 ├── DEMO_SCRIPT.md
+├── render.yaml                   # Render deployment blueprint
+├── runtime.txt                   # pinned Python version for Render
 └── requirements.txt
 ```
 

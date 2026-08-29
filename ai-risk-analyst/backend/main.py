@@ -9,6 +9,11 @@ import os
 import sys
 from functools import wraps
 
+# Ensures imports below work regardless of HOW this file is started --
+# `python backend/main.py` (local dev) adds this automatically, but
+# gunicorn (production) does not, so we make it explicit.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
 
@@ -42,6 +47,8 @@ app = Flask(
     static_folder="../static",
 )
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me-before-any-real-deployment")
+# Render sets RENDER=true automatically; only require secure (HTTPS-only) cookies in that environment
+app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("RENDER"))
 
 
 def login_required(view):
@@ -317,4 +324,8 @@ def system_status():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Only used for local dev (`python backend/main.py`). In production,
+    # gunicorn imports `app` directly and this block never runs.
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug)
