@@ -64,7 +64,7 @@ def generate_explanation(transaction, result: dict, rag_context: list[dict] | No
         return fallback
 
     try:
-        client = Groq(api_key=api_key)
+        client = Groq(api_key=api_key, timeout=15.0)
         response = client.chat.completions.create(
             model=MODEL,
             messages=[

@@ -1,7 +1,24 @@
-// Phase 0: wires the form to the dummy /analyze endpoint and updates the UI.
-// Later phases will replace the dummy backend logic, not this file's structure.
+// Full app: single-transaction analysis, batch analysis, logs/profiles/
+// insights/settings views, alerts, and pattern-intelligence feedback.
 
 const CIRCLE_CIRCUMFERENCE = 283; // 2 * PI * r(45), matches the SVG in index.html
+
+// Safely parses a fetch response as JSON. A server-side timeout or crash
+// often comes back as an HTML error page (from the host's proxy), not JSON
+// -- this turns that into a clean, readable error instead of a cryptic
+// "Unexpected token '<'" crash.
+async function safeJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(
+      res.ok
+        ? "Server returned an unexpected (non-JSON) response."
+        : `Server error (${res.status}). It may have timed out -- try again, or with a smaller file.`
+    );
+  }
+}
 
 const form = document.getElementById("analyzeForm");
 const analyzeBtn = document.getElementById("analyzeBtn");
@@ -57,9 +74,15 @@ switchView("single");
 // Logs view
 async function loadLogs(query) {
   const q = query !== undefined ? query : document.getElementById("logsSearchInput").value;
-  const res = await fetch(`/logs?q=${encodeURIComponent(q || "")}`);
-  const data = await res.json();
   const tbody = document.getElementById("logsTableBody");
+  let data;
+  try {
+    const res = await fetch(`/logs?q=${encodeURIComponent(q || "")}`);
+    data = await safeJson(res);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="py-3 text-error text-sm">${err.message}</td></tr>`;
+    return;
+  }
   const statusColor = { Suspicious: "text-error", Review: "text-tertiary", Cleared: "text-primary" };
   tbody.innerHTML = (data.logs || [])
     .map((l) => {
@@ -104,9 +127,15 @@ document.getElementById("logsSearchInput")?.addEventListener("input", (e) => loa
 
 // Profiles view
 async function loadProfiles() {
-  const res = await fetch("/profiles");
-  const data = await res.json();
   const tbody = document.getElementById("profilesTableBody");
+  let data;
+  try {
+    const res = await fetch("/profiles");
+    data = await safeJson(res);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="py-3 text-error text-sm">${err.message}</td></tr>`;
+    return;
+  }
   tbody.innerHTML = (data.profiles || [])
     .map((p) => {
       const bars = p.recent_scores
@@ -130,8 +159,14 @@ async function loadProfiles() {
 
 // Insights view
 async function loadInsights() {
-  const res = await fetch("/insights");
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch("/insights");
+    data = await safeJson(res);
+  } catch (err) {
+    document.getElementById("insightsList").innerHTML = `<li class="text-error">${err.message}</li>`;
+    return;
+  }
   document.getElementById("insightTotal").textContent = data.total_transactions;
   document.getElementById("insightFlaggedPct").textContent = `${data.flagged_pct}%`;
   document.getElementById("insightPeakWindow").textContent = data.peak_fraud_window;
@@ -145,7 +180,7 @@ async function loadInsights() {
   list.innerHTML = dynamicInsights.map((s) => `<li>- ${s}</li>`).join("");
 
   const patternsRes = await fetch("/patterns");
-  const patternsData = await patternsRes.json();
+  const patternsData = await safeJson(patternsRes);
   const patternsBody = document.getElementById("patternsTableBody");
   const riskColor = { High: "text-error", Medium: "text-tertiary", Low: "text-primary" };
   patternsBody.innerHTML = (patternsData.patterns || []).length
@@ -166,11 +201,15 @@ async function loadInsights() {
 
 // Settings view
 async function loadSettings() {
-  const res = await fetch("/system_status");
-  const data = await res.json();
-  document.getElementById("settingsVersion").textContent = data.version;
-  document.getElementById("settingsGroq").textContent = data.groq_configured ? "Connected" : "Not configured";
-  document.getElementById("settingsFirebase").textContent = data.firebase_connected ? "Connected" : "Using local JSON fallback";
+  try {
+    const res = await fetch("/system_status");
+    const data = await safeJson(res);
+    document.getElementById("settingsVersion").textContent = data.version;
+    document.getElementById("settingsGroq").textContent = data.groq_configured ? "Connected" : "Not configured";
+    document.getElementById("settingsFirebase").textContent = data.firebase_connected ? "Connected" : "Using local JSON fallback";
+  } catch (err) {
+    document.getElementById("settingsVersion").textContent = "Error loading status";
+  }
 }
 
 // Alerts dropdown
@@ -182,7 +221,7 @@ alertsBellBtn.addEventListener("click", async (e) => {
   const isHidden = alertsDropdown.classList.contains("hidden");
   if (isHidden) {
     const res = await fetch("/logs");
-    const data = await res.json();
+    const data = await safeJson(res);
     const highRisk = (data.logs || []).filter((l) => l.status === "Suspicious").slice(0, 5);
     const alertsList = document.getElementById("alertsList");
     alertsList.innerHTML = highRisk.length
@@ -260,7 +299,7 @@ document.getElementById("runBatchBtn")?.addEventListener("click", async () => {
 
   try {
     const res = await fetch("/analyze_batch", { method: "POST", body: formData });
-    const data = await res.json();
+    const data = await safeJson(res);
 
     if (!res.ok) {
       alert(`Batch failed: ${data.error || "unknown error"}\n${(data.details || []).join("\n")}`);
@@ -312,7 +351,7 @@ if (tsInput && !tsInput.value) {
   const locationInput = document.getElementById("inputLocation");
   try {
     const res = await fetch("https://ipapi.co/json/");
-    const data = await res.json();
+    const data = await safeJson(res);
     if (data && data.ip) {
       locationInput.value = `${data.ip} (${data.country_code || "IN"})`;
     } else {
@@ -412,7 +451,7 @@ function addFeedEntry(status, txId) {
 async function pollLiveFeed() {
   try {
     const res = await fetch("/logs");
-    const data = await res.json();
+    const data = await safeJson(res);
     const newOnes = (data.logs || []).filter((l) => !shownTxIds.has(l.tx_id));
     newOnes.reverse().forEach((l) => addFeedEntry(l.status, l.tx_id));
   } catch (err) {
@@ -443,7 +482,7 @@ form.addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
 
     if (!res.ok) {
       // Phase 1: backend validation failures come back as {error, details: [...]}
